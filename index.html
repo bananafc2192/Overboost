@@ -1382,7 +1382,19 @@ async function renderReport() {
     if (_cur) _selEl.value = _cur;
   }
 
-  const filteredSales = allSales.filter(s => {
+  // แปลง พ.ศ. → ค.ศ. กรณี browser ไทยส่งปีเป็น พ.ศ.
+  let dateInputFixed = dateInput;
+  if (dateInput) {
+    const parts = dateInput.split('-');
+    const year = parseInt(parts[0]);
+    if (year > 2500) dateInputFixed = `${year - 543}-${parts[1]}-${parts[2]}`;
+  }
+  let monthInputFixed = monthInput;
+  if (monthInput) {
+    const parts = monthInput.split('-');
+    const year = parseInt(parts[0]);
+    if (year > 2500) monthInputFixed = `${year - 543}-${parts[1]}`;
+  }
     if (!s || !s.time) return false;
     const d = new Date(s.time);
     if (isNaN(d.getTime())) return false;
@@ -1395,8 +1407,8 @@ async function renderReport() {
     const dateStr = `${y}-${m}-${day}`; // ออกมาเป็น "YYYY-MM-DD"
     const monthStr = `${y}-${m}`;       // ออกมาเป็น "YYYY-MM"
 
-    if (dateInput && dateStr !== dateInput) return false;
-    if (!dateInput && monthInput && monthStr !== monthInput) return false;
+    if (dateInputFixed  && dateStr  !== dateInputFixed)  return false;
+    if (!dateInputFixed && monthInputFixed && monthStr !== monthInputFixed) return false;
     if (sellerFilter && s.seller !== sellerFilter) return false;
 
     if (!searchInput) return true;
