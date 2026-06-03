@@ -886,8 +886,8 @@ function initApp() {
   catSel.innerHTML = '<option value="">ทุกหมวด</option>';
   CATS.forEach(c => { catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`; });
   filterProducts();
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('rpt-date').value = today;
+  // ไม่ตั้ง default วันที่ — ให้ admin เลือกเอง ป้องกัน filter ค้าง
+  // document.getElementById('rpt-date').value = today;
   initMonthFilter();
   // updateSellerFilter และ startAdminPoll ทำหลัง login เสร็จ
   setTimeout(() => {
@@ -1354,22 +1354,35 @@ function getSales() {
 async function renderReport() {
   if (currentUser?.role !== 'admin') return;
 
-  const dateInput  = document.getElementById('rpt-date')?.value  || "";
-  const monthInput = document.getElementById('rpt-month')?.value || "";
-  const sellerFilter = document.getElementById('rpt-seller')?.value || "";
+  const dateInput    = document.getElementById('rpt-date')?.value    || "";
+  const monthInput   = document.getElementById('rpt-month')?.value   || "";
+  const sellerFilter = document.getElementById('rpt-seller')?.value  || "";
   const searchInput  = document.getElementById('rpt-search')?.value?.trim().toLowerCase() || "";
 
   document.getElementById('report-body').innerHTML =
     '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
 
-  // ดึงข้อมูลใหม่ทุกครั้ง ไม่ cache
+  // ดึงข้อมูลครั้งเดียว แล้วแชร์กับ seller filter ด้วย
   let allSales = [];
   try {
-    const res = await fetch(API_URL + '?action=getSales');
+    const res  = await fetch(API_URL + '?action=getSales');
     const data = await res.json();
     allSales = data.sales || [];
   } catch(e) {
     allSales = getSales() || [];
+  }
+
+  // อัพเดต seller filter จากข้อมูลชุดเดียวกัน (ไม่ fetch ซ้ำ)
+  const sellers = [...new Set(allSales.map(s => s.seller).filter(Boolean))];
+  const selEl = document.getElementById('rpt-seller');
+  if (selEl) {
+    const cur = selEl.value;
+    selEl.innerHTML = '<option value="">ทุกคน</option>';
+    sellers.forEach(u => {
+      const name = USERS[u]?.name || u;
+      selEl.innerHTML += `<option value="${u}">${name}</option>`;
+    });
+    if (cur) selEl.value = cur;
   }
 
   const filteredSales = allSales.filter(s => {
@@ -1378,11 +1391,12 @@ async function renderReport() {
     if (isNaN(d.getTime())) return false;
 
     const y   = d.getFullYear();
-    const m   = String(d.getMonth() + 1).padStart(2, '0');
+    const mo  = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    const dateStr  = `${y}-${m}-${day}`;
-    const monthStr = `${y}-${m}`;
+    const dateStr  = `${y}-${mo}-${day}`;
+    const monthStr = `${y}-${mo}`;
 
+    // กรองวันที่เฉพาะเมื่อผู้ใช้เลือกเอง ไม่ใช่ค่า default
     if (dateInput  && dateStr  !== dateInput)  return false;
     if (!dateInput && monthInput && monthStr !== monthInput) return false;
     if (sellerFilter && s.seller !== sellerFilter) return false;
@@ -1397,35 +1411,34 @@ async function renderReport() {
   });
 
   const totalRevenue = filteredSales.reduce((sum, x) => sum + (Number(x.total) || 0), 0);
-  const totalItems = filteredSales.reduce((sum, x) => {
+  const totalItems   = filteredSales.reduce((sum, x) => {
     if (!Array.isArray(x.items)) return sum;
     return sum + x.items.reduce((a, i) => a + (Number(i.qty) || 0), 0);
   }, 0);
-  const sellers = [...new Set(filteredSales.map(s => s.seller).filter(Boolean))].length;
+  const sellerCount = [...new Set(filteredSales.map(s => s.seller).filter(Boolean))].length;
 
   document.getElementById('stats-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">ยอดขายรวม</div><div class="stat-val red">${fmt(totalRevenue)}</div></div>
     <div class="stat-card"><div class="stat-label">จำนวนบิล</div><div class="stat-val">${filteredSales.length}</div></div>
     <div class="stat-card"><div class="stat-label">จำนวนชิ้น</div><div class="stat-val">${totalItems}</div></div>
-    <div class="stat-card"><div class="stat-label">พนักงานที่ขาย</div><div class="stat-val green">${sellers}</div></div>`;
+    <div class="stat-card"><div class="stat-label">พนักงานที่ขาย</div><div class="stat-val green">${sellerCount}</div></div>`;
 
   if (filteredSales.length === 0) {
-    document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">ไม่มีข้อมูล</td></tr>';
+    document.getElementById('report-body').innerHTML =
+      '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">ไม่มีข้อมูลในช่วงที่เลือก</td></tr>';
     return;
   }
-  
+
   filteredSales.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
   window._lastSales = filteredSales;
-  
+
   document.getElementById('report-body').innerHTML = filteredSales.map(s => {
     const d = new Date(s.time);
-    const t = isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
-    
+    const t = isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
     const itemsArray = Array.isArray(s.items) ? s.items : [];
-    const itemList = itemsArray.map(i => `${(i.name || '').substring(0,20)} x${i.qty || 0}`).join(', ');
-    const qty = itemsArray.reduce((a, i) => a + (Number(i.qty) || 0), 0);
+    const itemList   = itemsArray.map(i => `${(i.name || '').substring(0, 20)} x${i.qty || 0}`).join(', ');
+    const qty   = itemsArray.reduce((a, i) => a + (Number(i.qty) || 0), 0);
     const total = Number(s.total) || 0;
-
     return `<tr>
       <td>${t}</td>
       <td><span class="seller-badge">${s.sellerName || s.seller || '-'}</span></td>
@@ -1439,24 +1452,8 @@ async function renderReport() {
 }
 
 async function updateSellerFilter() {
-  let sales = [];
-  try {
-    const res = await fetch(API_URL + '?action=getSales');
-    const data = await res.json();
-    sales = data.sales || [];
-  } catch(e) {
-    sales = getSales();
-  }
-  const sellers = [...new Set(sales.map(s => s.seller).filter(Boolean))];
-  const sel = document.getElementById('rpt-seller');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">ทุกคน</option>';
-  sellers.forEach(u => {
-    const name = USERS[u]?.name || u;
-    sel.innerHTML += `<option value="${u}">${name}</option>`;
-  });
-  if (cur) sel.value = cur;
+  // renderReport จัดการ seller filter ให้แล้วในตัว
+  // เรียก renderReport เพียงครั้งเดียวพอ
 }
 
 function clearSales() {
