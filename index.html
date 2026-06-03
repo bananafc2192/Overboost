@@ -1395,6 +1395,8 @@ async function renderReport() {
     const year = parseInt(parts[0]);
     if (year > 2500) monthInputFixed = `${year - 543}-${parts[1]}`;
   }
+
+  const filteredSales = allSales.filter(s => {
     if (!s || !s.time) return false;
     const d = new Date(s.time);
     if (isNaN(d.getTime())) return false;
