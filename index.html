@@ -728,7 +728,6 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
     <div class="report-header">
       <h2 style="font-size:18px">📊 รายงานการขาย</h2>
       <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="printReport()" class="btn-print no-print" style="width:auto;padding:6px 16px;color:var(--text);border-color:var(--border)">🖨️ พิมพ์ Report A4</button>
         <button onclick="exportReport(this)" class="btn-print no-print" style="width:auto;padding:6px 16px;color:#22c55e;border-color:#22c55e">📥 Export Excel</button>
       </div>
       <div class="report-date-filter">
@@ -788,6 +787,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
         <option value="retail">ราคาขาย</option>
         <option value="w1">ราคาส่ง 1</option>
         <option value="w2">ราคาส่ง 2+</option>
+        <option value="free">🎁 ของแถม (ฟรี)</option>
       </select>
       <button class="btn-modal-add" onclick="addToCart()">+ ใส่ตะกร้า</button>
     </div>
@@ -1179,11 +1179,11 @@ function addToCart() {
 }
 
 function addCartItem(prod, qty, priceType) {
-  const priceMap = { retail: prod.priceRetail, w1: prod.priceWholesale1, w2: prod.priceWholesale2 };
-  const price = priceMap[priceType] || prod.priceRetail;
+  const priceMap = { retail: prod.priceRetail, w1: prod.priceWholesale1, w2: prod.priceWholesale2, free: 0 };
+  const price = priceType === 'free' ? 0 : (priceMap[priceType] || prod.priceRetail);
   const existing = cart.find(c => c.id === prod.id && c.priceType === priceType);
   if (existing) existing.qty += qty;
-  else cart.push({ id: prod.id, name: prod.name, price, priceType, qty });
+  else cart.push({ id: prod.id, name: prod.name, price, priceType, qty, isFree: priceType === 'free' });
   updateCartBadge();
 }
 
@@ -1219,19 +1219,20 @@ function renderCart() {
   }
   list.innerHTML = cart.map((item, idx) => {
     const total = item.price * item.qty;
-    const typeLabel = { retail: 'ขายปลีก', w1: 'ส่ง 1 ชิ้น', w2: 'ส่ง 2+' }[item.priceType];
-    return `<div class="cart-item">
+    const typeLabel = { retail: 'ขายปลีก', w1: 'ส่ง 1 ชิ้น', w2: 'ส่ง 2+', free: '🎁 ของแถม' }[item.priceType] || item.priceType;
+    const isFree = item.priceType === 'free';
+    return `<div class="cart-item" ${isFree ? 'style="border-left:3px solid var(--amber);background:rgba(245,158,11,0.05)"' : ''}>
       <div class="cart-item-info">
-        <div class="cart-item-name">${item.name}</div>
+        <div class="cart-item-name">${item.name} ${isFree ? '<span style="font-size:11px;background:var(--amber);color:#000;padding:1px 6px;border-radius:4px;font-weight:700">ฟรี</span>' : ''}</div>
         <div class="cart-item-id">${item.id} · ${typeLabel}</div>
-        <div class="cart-item-price">${fmt(item.price)}/ชิ้น</div>
+        <div class="cart-item-price">${isFree ? '<span style="color:var(--amber)">ของแถม ไม่คิดราคา</span>' : fmt(item.price)+'/ชิ้น'}</div>
       </div>
       <div class="cart-item-actions">
         <button class="qty-btn" onclick="changeQty(${idx},-1)">−</button>
         <div class="cart-item-qty">${item.qty}</div>
         <button class="qty-btn" onclick="changeQty(${idx},1)">+</button>
       </div>
-      <div class="cart-item-total">${fmt(total)}</div>
+      <div class="cart-item-total" style="${isFree ? 'color:var(--amber)' : ''}">${isFree ? '฿0' : fmt(total)}</div>
       <button class="cart-del" onclick="removeItem(${idx})">🗑</button>
     </div>`;
   }).join('');
@@ -1272,14 +1273,17 @@ function goToQuote() {
   const discountVal = discountApproved ? discountAmount : 0;
   const grand = subTotal - discountVal;
   
-  let htmlBody = cart.map(item => `
-    <tr>
-      <td style="font-size:12px;color:var(--text2)">${item.id}</td>
-      <td>${item.name}</td>
-      <td style="text-align:right">${fmt(item.price)}</td>
+  let htmlBody = cart.map(item => {
+    const isFree = item.priceType === 'free';
+    return `
+    <tr ${isFree ? 'style="color:var(--amber)"' : ''}>
+      <td style="font-size:12px;color:${isFree?'var(--amber)':'var(--text2)'}">${item.id}</td>
+      <td>${item.name}${isFree ? ' <span style="font-size:10px;background:var(--amber);color:#000;padding:1px 5px;border-radius:3px;font-weight:700">ของแถม</span>' : ''}</td>
+      <td style="text-align:right">${isFree ? '-' : fmt(item.price)}</td>
       <td style="text-align:right">${item.qty}</td>
-      <td style="text-align:right;font-weight:600">${fmt(item.price * item.qty)}</td>
-    </tr>`).join('');
+      <td style="text-align:right;font-weight:600">${isFree ? '฿0' : fmt(item.price * item.qty)}</td>
+    </tr>`;
+  }).join('');
     
   // --- จุดที่แก้ไข: เพิ่มบรรทัดแสดงส่วนลดในตารางใบเสร็จ ---
   if (discountVal > 0) {
