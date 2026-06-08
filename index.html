@@ -368,7 +368,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
 
   /* Slip 80mm mode */
   body.print-slip * { font-size: 11px !important; line-height: 1.4 !important; }
-  body.print-slip .quote-container { width: 72mm !important; margin: 0 !important; padding: 0 !important; }
+  body.print-slip .quote-container { width: 72mm !important; margin: 0 !important; padding: 0 2mm !important; }
   body.print-slip .quote-header-box {
     border: none !important; background: #fff !important;
     padding: 4px 0 !important; border-radius: 0 !important;
@@ -385,6 +385,9 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   body.print-slip .quote-total-row td { font-size: 12px !important; font-weight: bold !important; color: #000 !important; border-top: 1px solid #000 !important; }
   body.print-slip .slip-footer { display: block !important; text-align: center !important; font-size: 10px !important; border-top: 1px dashed #000 !important; margin-top: 6px !important; padding-top: 6px !important; }
   body.print-slip #a4-footer { display: none !important; }
+body.print-slip { margin: 0 !important; padding: 0 !important; }
+  body.print-slip .page-quote { padding: 0 !important; margin: 0 !important; }
+  @page { margin: 3mm; size: 80mm auto; }
 }
 
 /* Slip footer (hidden on screen) */
@@ -1021,7 +1024,9 @@ function playNotifySound() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const notes = [523, 659, 784, 1047];
-    notes.forEach((freq, i) => {
+    const rounds = 4; // เปลี่ยนตรงนี้เป็น 4 ถ้าอยากได้ 4 รอบ
+    const allNotes = Array(rounds).fill(notes).flat();
+    allNotes.forEach((freq, i) => {
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
