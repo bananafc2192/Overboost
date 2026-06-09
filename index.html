@@ -937,9 +937,10 @@ async function requestDiscount() {
   document.getElementById('approval-modal').classList.add('open');
 
   try {
+    const itemsSummary = cart.map(c => `${c.name} x${c.qty}`).join(', ');
     const res = await fetch(API_URL + '?action=submitDiscountRequest&seller=' +
       encodeURIComponent(currentUser.name) + '&username=' + encodeURIComponent(currentUser.username) +
-      '&amount=' + amt + '&total=' + grand);
+      '&amount=' + amt + '&total=' + grand + '&items=' + encodeURIComponent(itemsSummary));
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'failed');
     currentDiscReqId = data.reqId;
@@ -1080,6 +1081,7 @@ function renderDiscPanel(reqs) {
     <div class="disc-req-card">
       <div class="disc-req-meta">👤 ${r.sellerName} · ${new Date(r.time).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</div>
       <div class="disc-req-meta">ยอดรวม: ฿${parseFloat(r.total||0).toLocaleString()}</div>
+      ${r.items ? `<div class="disc-req-meta" style="color:var(--text);font-size:12px;line-height:1.6;background:rgba(255,255,255,0.04);border-radius:6px;padding:6px 8px;margin:4px 0">🛒 ${r.items}</div>` : ''}
       <div class="disc-req-amount">ขอลด ฿${parseFloat(r.amount).toLocaleString()}</div>
       <div class="disc-req-actions">
         <button class="btn-approve" onclick="adminRespond('${r.reqId}','approved')">✅ อนุมัติ</button>
