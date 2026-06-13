@@ -1770,20 +1770,33 @@ async function loadProductsFromSheet() {
 // ===== HISTORY SYSTEM =====
 let _histAllSales = null;
 let _histSearchTimeout = null;
+let _fetchSalesPromise = null; // เพิ่มตัวแปรป้องกันการยิง Request รัวๆ
 
 async function loadAllSales() {
   if (_histAllSales) return _histAllSales;
-  try {
-    const res = await fetch(API_URL + '?action=getSales');
-    const data = await res.json();
-    _histAllSales = data.sales || [];
-    return _histAllSales;
-  } catch(e) {
-    return getSales() || []; // ดึงจากเครื่องสำรองถ้าเน็ตหลุด
-  }
+  
+  // ถ้ากำลังโหลดข้อมูลอยู่ (พนักงานพิมพ์ต่อเนื่อง) ให้รออันเดิม ห้ามยิงคำสั่งใหม่
+  if (_fetchSalesPromise) return await _fetchSalesPromise;
+
+  _fetchSalesPromise = fetch(API_URL + '?action=getSales')
+    .then(res => res.json())
+    .then(data => {
+      _histAllSales = data.sales || [];
+      _fetchSalesPromise = null; // โหลดเสร็จแล้ว ปลดล็อก
+      return _histAllSales;
+    })
+    .catch(e => {
+      _fetchSalesPromise = null; // ถ้าเน็ตหลุด ปลดล็อก
+      return getSales() || []; // ดึงจากเครื่องสำรอง
+    });
+
+  return await _fetchSalesPromise;
 }
 
-function clearHistCache() { _histAllSales = null; }
+function clearHistCache() { 
+  _histAllSales = null; 
+  _fetchSalesPromise = null;
+}
 
 function clearHistory() {
   document.getElementById('hist-keyword').value = '';
