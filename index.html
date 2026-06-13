@@ -1454,8 +1454,11 @@ async function confirmSale() {
   document.getElementById('cust-phone').value = '';
   document.getElementById('cust-note').value = '';
   btn.textContent = '✅ ยืนยันการขาย';
-  btn.disabled = false;
-  setTimeout(() => showPage('products'), 1200);
+ btn.disabled = false;
+  setTimeout(() => {
+    showPage('products');
+    loadProductsFromSheet(); // <--- เติมบรรทัดนี้เข้าไปครับ
+  }, 1200);
 }
 
 function getSales() {
