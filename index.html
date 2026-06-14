@@ -1782,18 +1782,21 @@ async function loadAllSales() {
 
   _fetchSalesPromise = fetch(API_URL + '?action=getSales')
     .then(async (res) => {
-      const text = await res.text(); // 1. อ่านสิ่งที่ Google ส่งมาก่อน (ไม่ว่าจะเป็นข้อมูลหรือหน้า Error)
+      const text = await res.text(); 
       try {
-        const data = JSON.parse(text); // 2. ลองแปลงเป็นข้อมูล
+        const data = JSON.parse(text); 
         if (!data.ok) throw new Error(data.error);
         _histAllSales = data.sales || [];
+        
+        // 🌟 สั่งให้ก๊อปปี้ข้อมูลออนไลน์ทั้งหมด มายัดใส่ความจำเครื่องให้หน้า Admin อ่าน 🌟
+        localStorage.setItem('sales', JSON.stringify(_histAllSales));
+
         _fetchSalesPromise = null;
         return _histAllSales;
       } catch(err) {
-        // 3. ถ้า Google ส่ง Error (<!DOCTYPE html>...) กลับมา ระบบจะไม่ค้างแล้ว!
         console.error("🚨 ทราบสาเหตุแล้ว! โค้ดฝั่ง Google Sheets พัง ส่ง Error มาว่า:", text);
         _fetchSalesPromise = null;
-        return getSales() || []; // ดึงข้อมูลสำรองในเครื่องมาโชว์แก้ขัดไปก่อน
+        return getSales() || []; 
       }
     })
     .catch(e => {
