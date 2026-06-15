@@ -1788,8 +1788,8 @@ async function loadAllSales() {
         if (!data.ok) throw new Error(data.error);
         _histAllSales = data.sales || [];
         
-        // 🌟 สั่งให้ก๊อปปี้ข้อมูลออนไลน์ทั้งหมด มายัดใส่ความจำเครื่องให้หน้า Admin อ่าน 🌟
-        localStorage.setItem('sales', JSON.stringify(_histAllSales));
+        // 🟢 แก้จาก 'sales' เป็น 'ovb_sales' ตรงบรรทัดด้านล่างนี้ครับ 🟢
+        localStorage.setItem('ovb_sales', JSON.stringify(_histAllSales));
 
         _fetchSalesPromise = null;
         return _histAllSales;
