@@ -940,12 +940,24 @@ async function requestDiscount() {
   document.getElementById('approval-modal').classList.add('open');
 
   try {
-    const itemsSummary = cart.map(c => `${c.name} x${c.qty}`).join(', ');
-    const res = await fetch(API_URL + '?action=submitDiscountRequest&seller=' +
-      encodeURIComponent(currentUser.name) + '&username=' + encodeURIComponent(currentUser.username) +
-      '&amount=' + amt + '&total=' + grand + '&items=' + encodeURIComponent(itemsSummary));
+    // 📦 1. แพ็คข้อมูลสินค้าใหม่ให้อยู่ในรูปแบบ "กล่อง (Array)" เพื่อให้หลังบ้านอ่านออก
+    const itemsArr = cart.map(c => `${c.name || 'สินค้ารหัส ' + c.id} (x${c.qty})`);
+    const itemsJsonStr = JSON.stringify(itemsArr);
+
+    // 🔗 2. แปลงข้อมูลทั้งหมดให้ปลอดภัยก่อนส่ง
+    const urlParams = new URLSearchParams({
+      action: 'submitDiscountRequest',
+      seller: currentUser.name,
+      username: currentUser.username,
+      amount: amt,
+      total: grand,
+      items: itemsJsonStr
+    });
+
+    const res = await fetch(API_URL + '?' + urlParams.toString());
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'failed');
+    
     currentDiscReqId = data.reqId;
     document.getElementById('dr-pulse-txt').textContent = 'รอ Admin อนุมัติ...';
     startDiscPolling();
@@ -1146,21 +1158,41 @@ function renderDiscPanel(reqs) {
   }
   
   body.innerHTML = reqs.map(r => {
-    // 🔘 สร้างหน้าตาการ์ดชั่วคราว เพื่อสแกนดูข้อมูลดิบ
+    // 🛒 ตรวจสอบรายการสินค้า
+    let itemsHtml = '';
+    // ถ้ามีข้อมูลสินค้าส่งมา และไม่ใช่ "[]"
+    if (r.items && r.items !== "[]" && r.items !== "") {
+       try {
+         let parsed = JSON.parse(r.items);
+         if(Array.isArray(parsed)){
+            let list = parsed.map(it => {
+               let name = typeof it === 'object' ? (it.name || it.id || 'สินค้า') : it;
+               return `<div style="padding:2px 0; color:var(--text);">• ${name}</div>`;
+            }).join('');
+            itemsHtml = `<div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
+              <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าที่ขอส่วนลด:</div>
+              ${list}
+            </div>`;
+         }
+       } catch(e) {
+         itemsHtml = `<div style="color:var(--text2); font-size:12px; margin:8px 0;">${r.items}</div>`;
+       }
+    } else {
+       // ถ้าระบบพนักงานส่ง "[]" มา จะขึ้นแจ้งเตือนสีแดงไว้ก่อน
+       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ ระบบยังไม่ได้รับชื่อสินค้าจากหน้าร้าน</div>`;
+    }
+
+    // 🔘 สร้างหน้าตาการ์ดที่สมบูรณ์
     return `
     <div style="border-bottom:1px solid var(--border); padding:12px 0;">
       <div style="font-size:13px; color:var(--text);">
-        👨‍💼 พนักงาน: <b>${r.sellerName || 'ไม่ระบุ'}</b>
+        👨‍💼 พนักงาน: <b>${r.sellerName || r.seller || 'ไม่ระบุ'}</b>
+      </div>
+      <div style="font-size:16px; color:var(--amber); font-weight:bold; margin-top:4px;">
+        💰 ขอส่วนลดเหลือ: ฿${Number(r.total || 0).toLocaleString()}
       </div>
       
-      <div style="margin-top:10px; background:#111; border:1px solid #0f0; border-radius:6px; padding:8px;">
-        <div style="color:#0f0; font-size:12px; margin-bottom:4px; font-weight:bold;">
-          🛠️ ข้อมูลดิบจากระบบ (รบกวนคุณโต้งแคปรูปกล่องนี้ส่งให้ผมทีครับ):
-        </div>
-        <div style="color:#fff; font-size:11px; word-break:break-all;">
-          ${JSON.stringify(r)}
-        </div>
-      </div>
+      ${itemsHtml}
       
       <div style="display:flex; gap:8px; margin-top:10px;">
         <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ</button>
