@@ -1160,7 +1160,6 @@ function renderDiscPanel(reqs) {
   body.innerHTML = reqs.map(r => {
     // 🛒 ตรวจสอบรายการสินค้า
     let itemsHtml = '';
-    // ถ้ามีข้อมูลสินค้าส่งมา และไม่ใช่ "[]"
     if (r.items && r.items !== "[]" && r.items !== "") {
        try {
          let parsed = JSON.parse(r.items);
@@ -1170,38 +1169,51 @@ function renderDiscPanel(reqs) {
                return `<div style="padding:2px 0; color:var(--text);">• ${name}</div>`;
             }).join('');
             itemsHtml = `<div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
-              <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าที่ขอส่วนลด:</div>
+              <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าในตะกร้า:</div>
               ${list}
             </div>`;
+         } else {
+            itemsHtml = `<div style="color:var(--text2); font-size:12px; margin:8px 0;">${r.items}</div>`;
          }
        } catch(e) {
          itemsHtml = `<div style="color:var(--text2); font-size:12px; margin:8px 0;">${r.items}</div>`;
        }
     } else {
-       // ถ้าระบบพนักงานส่ง "[]" มา จะขึ้นแจ้งเตือนสีแดงไว้ก่อน
-       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ ระบบยังไม่ได้รับชื่อสินค้าจากหน้าร้าน</div>`;
+       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ รอรับข้อมูลสินค้า (พนักงานต้องกด Ctrl+F5)</div>`;
     }
 
-    // 🔘 สร้างหน้าตาการ์ดที่สมบูรณ์
+    // 💰 คำนวณตัวเลขให้ถูกต้องเป๊ะ 100%
+    let total = Number(r.total || 0);
+    let discount = Number(r.amount || 0);
+    let finalPrice = total - discount;
+
     return `
     <div style="border-bottom:1px solid var(--border); padding:12px 0;">
       <div style="font-size:13px; color:var(--text);">
         👨‍💼 พนักงาน: <b>${r.sellerName || r.seller || 'ไม่ระบุ'}</b>
       </div>
-      <div style="font-size:16px; color:var(--amber); font-weight:bold; margin-top:4px;">
-        💰 ขอส่วนลดเหลือ: ฿${Number(r.total || 0).toLocaleString()}
+      
+      <div style="margin-top:8px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid var(--border);">
+        <div style="font-size:13px; color:var(--text2); display:flex; justify-content:space-between;">
+          <span>ยอดรวมเดิม:</span> <span>฿${total.toLocaleString()}</span>
+        </div>
+        <div style="font-size:14px; color:var(--red); font-weight:bold; display:flex; justify-content:space-between; margin-top:4px;">
+          <span>🔥 ขอส่วนลด:</span> <span>- ฿${discount.toLocaleString()}</span>
+        </div>
+        <div style="font-size:16px; color:var(--green); font-weight:bold; display:flex; justify-content:space-between; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);">
+          <span>✅ ลูกค้าต้องจ่าย:</span> <span>฿${finalPrice.toLocaleString()}</span>
+        </div>
       </div>
       
       ${itemsHtml}
       
       <div style="display:flex; gap:8px; margin-top:10px;">
-        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ</button>
+        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ (เหลือ ฿${finalPrice.toLocaleString()})</button>
         <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'reject')" style="flex:1; background:var(--red); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">❌ ไม่อนุมัติ</button>
       </div>
     </div>`;
   }).join('');
 }
-
 async function adminRespond(reqId, action) {
   try {
     const res = await fetch(API_URL + '?action=respondDiscount&reqId=' + reqId + '&status=' + action);
