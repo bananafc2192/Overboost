@@ -929,7 +929,6 @@ async function requestDiscount() {
   const grand = cart.reduce((s, c) => s + c.price * c.qty, 0);
   if (amt >= grand) { showToast('ส่วนลดมากเกินยอดรวม', 'error'); return; }
 
-  // Show waiting modal
   document.getElementById('approval-info').innerHTML =
     `<b>${currentUser.name}</b> ขอส่วนลด<br>
      <b style="color:var(--amber);font-size:22px">฿${amt.toLocaleString()}</b><br>
@@ -940,18 +939,16 @@ async function requestDiscount() {
   document.getElementById('approval-modal').classList.add('open');
 
   try {
-    // 📦 1. แพ็คข้อมูลสินค้าใหม่ให้อยู่ในรูปแบบ "กล่อง (Array)" เพื่อให้หลังบ้านอ่านออก
-    const itemsArr = cart.map(c => `${c.name || 'สินค้ารหัส ' + c.id} (x${c.qty})`);
-    const itemsJsonStr = JSON.stringify(itemsArr);
+    // 🥷 ทริคบายพาส: เอาชื่อสินค้า คั่นด้วย ||| แล้วฝากไปพร้อมกับชื่อพนักงานเลย!
+    const itemsSummary = cart.map(c => `${c.name || 'สินค้ารหัส ' + c.id} (x${c.qty})`).join(', ');
+    const smuggledSellerData = currentUser.name + '|||' + itemsSummary;
 
-    // 🔗 2. แปลงข้อมูลทั้งหมดให้ปลอดภัยก่อนส่ง
     const urlParams = new URLSearchParams({
       action: 'submitDiscountRequest',
-      seller: currentUser.name,
+      seller: smuggledSellerData, // ส่งข้อมูลยัดไส้ไปตรงนี้
       username: currentUser.username,
       amount: amt,
-      total: grand,
-      items: itemsJsonStr
+      total: grand
     });
 
     const res = await fetch(API_URL + '?' + urlParams.toString());
@@ -1158,31 +1155,27 @@ function renderDiscPanel(reqs) {
   }
   
   body.innerHTML = reqs.map(r => {
-    // 🛒 ตรวจสอบรายการสินค้า
+    
+    // 🥷 ทริคบายพาส: แกะข้อมูลที่ยัดไส้มา แยกชื่อพนักงานกับสินค้าออกจากกัน
+    let rawSeller = r.sellerName || r.seller || 'ไม่ระบุ';
+    let realSellerName = rawSeller;
     let itemsHtml = '';
-    if (r.items && r.items !== "[]" && r.items !== "") {
-       try {
-         let parsed = JSON.parse(r.items);
-         if(Array.isArray(parsed)){
-            let list = parsed.map(it => {
-               let name = typeof it === 'object' ? (it.name || it.id || 'สินค้า') : it;
-               return `<div style="padding:2px 0; color:var(--text);">• ${name}</div>`;
-            }).join('');
-            itemsHtml = `<div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
-              <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าในตะกร้า:</div>
-              ${list}
-            </div>`;
-         } else {
-            itemsHtml = `<div style="color:var(--text2); font-size:12px; margin:8px 0;">${r.items}</div>`;
-         }
-       } catch(e) {
-         itemsHtml = `<div style="color:var(--text2); font-size:12px; margin:8px 0;">${r.items}</div>`;
-       }
+    
+    // ถ้าเจอสัญลักษณ์ ||| แปลว่ามีการยัดไส้สินค้ามาด้วย
+    if (rawSeller.includes('|||')) {
+       let parts = rawSeller.split('|||');
+       realSellerName = parts[0];
+       
+       let itemsList = parts[1].split(',').map(it => `<div style="padding:2px 0; color:var(--text);">• ${it.trim()}</div>`).join('');
+       itemsHtml = `
+       <div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
+         <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าที่ลูกค้าซื้อ:</div>
+         ${itemsList}
+       </div>`;
     } else {
-       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ รอรับข้อมูลสินค้า (พนักงานต้องกด Ctrl+F5)</div>`;
+       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ รอรับข้อมูลสินค้า (พนักงานต้องกด Ctrl+F5 ใหม่อีกครั้ง)</div>`;
     }
 
-    // 💰 คำนวณตัวเลขให้ถูกต้องเป๊ะ 100%
     let total = Number(r.total || 0);
     let discount = Number(r.amount || 0);
     let finalPrice = total - discount;
@@ -1190,7 +1183,7 @@ function renderDiscPanel(reqs) {
     return `
     <div style="border-bottom:1px solid var(--border); padding:12px 0;">
       <div style="font-size:13px; color:var(--text);">
-        👨‍💼 พนักงาน: <b>${r.sellerName || r.seller || 'ไม่ระบุ'}</b>
+        👨‍💼 พนักงาน: <b>${realSellerName}</b>
       </div>
       
       <div style="margin-top:8px; background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; border:1px solid var(--border);">
