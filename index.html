@@ -1026,6 +1026,7 @@ async function cancelDiscountRequest() {
 // ===== NOTIFICATION SOUND =====
 let _audioCtx = null;
 let _lastReqIds = new Set();
+let _notifyInterval = null; // ตัวแปรคุมการวนลูปเสียง
 
 function getAudioCtx() {
   if (!_audioCtx || _audioCtx.state === 'closed') {
@@ -1035,38 +1036,53 @@ function getAudioCtx() {
   return _audioCtx;
 }
 
-function playNotifySound() {
+// 🔊 ฟังก์ชันเล่นเสียง "ติ๊ง-หน่อง" (ดังชัดแต่นุ่มนวล)
+function playDingDong() {
   try {
     const ctx = getAudioCtx();
-    // บังคับปลุกระบบเสียงทุกครั้ง ป้องกัน Browser บล็อก
-    if (ctx.state === 'suspended') ctx.resume(); 
-
-    const repeatTimes = 4; // เตือนซ้ำ 4 รอบให้สะดุดหู
+    if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
 
-    for (let i = 0; i < repeatTimes; i++) {
-      let timeOffset = now + (i * 0.8);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+    // เสียง "ติ๊ง"
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(784, now); // โน้ต G5
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    gain1.gain.setValueAtTime(1.0, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc1.start(now);
+    osc1.stop(now + 0.5);
 
-      osc.type = 'triangle'; // เสียงนุ่มนวลแบบเครื่องดนตรี ไม่บาดหู
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      // ปรับให้เสียงดังสุด (1.0)
-      gain.gain.setValueAtTime(1.0, timeOffset); 
-      gain.gain.exponentialRampToValueAtTime(0.01, timeOffset + 0.6);
-
-      // โน้ตเสียงแบบด่วนแต่นุ่ม (660 -> 880 -> 660)
-      osc.frequency.setValueAtTime(660, timeOffset);
-      osc.frequency.setValueAtTime(880, timeOffset + 0.2);
-      osc.frequency.setValueAtTime(660, timeOffset + 0.4);
-
-      osc.start(timeOffset);
-      osc.stop(timeOffset + 0.6);
-    }
+    // เสียง "หน่อง"
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(659.25, now + 0.3); // โน้ต E5
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    gain2.gain.setValueAtTime(1.0, now + 0.3);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+    osc2.start(now + 0.3);
+    osc2.stop(now + 0.8);
   } catch(e) {
     console.error("Audio Error:", e);
+  }
+}
+
+// 🔁 ฟังก์ชันสั่งให้เสียงเริ่มดัง "วนลูป" (เรียกตอนมีคำขอใหม่)
+function playNotifySound() {
+  if (_notifyInterval) return; // ถ้าดังอยู่แล้ว ไม่ต้องซ้ำ
+  playDingDong(); // ดังรอบแรกทันที
+  _notifyInterval = setInterval(playDingDong, 3000); // สั่งให้ดังซ้ำทุกๆ 3 วินาที
+}
+
+// 🛑 ฟังก์ชันสั่ง "หยุดเสียง" (เดี๋ยวเราจะเอาไปใส่ในปุ่ม อนุมัติ/ปฏิเสธ)
+function stopNotifySound() {
+  if (_notifyInterval) {
+    clearInterval(_notifyInterval);
+    _notifyInterval = null;
   }
 }
 
@@ -1106,17 +1122,22 @@ async function adminPollRequests() {
       bellBadge.style.display = 'flex';
       document.getElementById('bell-btn').style.borderColor = 'var(--amber)';
       
-      // ถ้ามีคำขอใหม่ที่ไม่เคยเตือน ให้ส่งเสียงทันที
+      // ถ้ามีคำขอใหม่ ให้ส่งเสียงกระดิ่งวนลูปทันที 🔔
       if (hasNew) playNotifySound();
       
     } else {
       bellBadge.style.display = 'none';
       document.getElementById('bell-btn').style.borderColor = '';
       _lastReqIds.clear(); // ล้างความจำเมื่อเคลียร์คำขอหมดแล้ว
+      
+      // 🛑 สั่งหยุดเสียงอัตโนมัติ ถ้าไม่มีคำขอค้างอยู่แล้ว
+      stopNotifySound(); 
     }
     
     renderDiscPanel(reqs);
-  } catch(e) {}
+  } catch(e) {
+    console.error("Poll Error:", e);
+  }
 }
 
 function renderDiscPanel(reqs) {
@@ -1125,29 +1146,36 @@ function renderDiscPanel(reqs) {
     body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text2);font-size:13px">✅ ไม่มีคำขอที่รอดำเนินการ</div>';
     return;
   }
+  
   body.innerHTML = reqs.map(r => {
-    // ดึงรายการสินค้ามาแสดงผลให้สวยงามและอ่านง่าย
+    // 🛒 จัดการดึงรายการสินค้ามาแสดงผลให้สวยงามและอ่านง่าย
     let itemsHtml = '';
     if (r.items) {
-       const itemsList = r.items.split(',').map(it => `<div style="padding:2px 0">• ${it.trim()}</div>`).join('');
+       const itemsList = r.items.split(',').map(it => `<div style="padding:2px 0; color:var(--text);">• ${it.trim()}</div>`).join('');
        itemsHtml = `
-       <div style="color:var(--text);font-size:12px;background:var(--bg);border:1px dashed var(--amber);border-radius:6px;padding:8px;margin:8px 0;max-height:100px;overflow-y:auto;">
-         <div style="color:var(--amber);margin-bottom:4px;font-weight:600">🛒 สินค้าที่ขอส่วนลด:</div>
+       <div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
+         <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าที่ขอส่วนลด:</div>
          ${itemsList}
        </div>`;
+    } else {
+       itemsHtml = `<div style="color:var(--text2); font-size:12px; font-style:italic; margin:8px 0;">(ไม่พบรายการสินค้า)</div>`;
     }
 
+    // 🔘 สร้างหน้าตาการ์ดแต่ละใบ พร้อมปุ่มกด
     return `
-    <div class="disc-req-card">
-      <div class="disc-req-meta">👤 <b>${r.sellerName}</b> · ${new Date(r.time).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})}</div>
-      <div class="disc-req-meta">ยอดรวมบิล: ฿${parseFloat(r.total||0).toLocaleString()}</div>
+    <div style="border-bottom:1px solid var(--border); padding:12px 0;">
+      <div style="font-size:13px; color:var(--text);">
+        👨‍💼 พนักงาน: <b>${r.sellerName || 'ไม่ระบุ'}</b>
+      </div>
+      <div style="font-size:15px; color:var(--amber); font-weight:bold; margin-top:4px;">
+        💰 ขอส่วนลดเหลือ: ฿${Number(r.reqPrice).toLocaleString()}
+      </div>
       
       ${itemsHtml}
       
-      <div class="disc-req-amount" style="margin-top:8px">💰 ขอลด: ฿${parseFloat(r.amount).toLocaleString()}</div>
-      <div class="disc-req-actions">
-        <button class="btn-approve" onclick="adminRespond('${r.reqId}','approved')">✅ อนุมัติ</button>
-        <button class="btn-reject" onclick="adminRespond('${r.reqId}','rejected')">❌ ปฏิเสธ</button>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ</button>
+        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'reject')" style="flex:1; background:var(--red); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">❌ ไม่อนุมัติ</button>
       </div>
     </div>`;
   }).join('');
