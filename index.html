@@ -1036,36 +1036,34 @@ function getAudioCtx() {
   return _audioCtx;
 }
 
-// 🔊 ฟังก์ชันเล่นเสียง "ติ๊ง-หน่อง" (ดังชัดแต่นุ่มนวล)
+// 🔊 ฟังก์ชันเล่นเสียง "ปี๊ป-ปี๊ป!" (แบบเครื่อง POS ดังชัดมาก)
 function playDingDong() {
   try {
     const ctx = getAudioCtx();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
 
-    // เสียง "ติ๊ง"
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(784, now); // โน้ต G5
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    gain1.gain.setValueAtTime(1.0, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-    osc1.start(now);
-    osc1.stop(now + 0.5);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'square'; // เปลี่ยนเป็นคลื่นสี่เหลี่ยม เสียงจะแหลมและดังมาก
+    osc.frequency.setValueAtTime(1000, now); // ความถี่สูงปรี๊ด
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    // ตั้งค่าความดังสูงสุด
+    gain.gain.setValueAtTime(1.0, now);
+    
+    // จังหวะ ปี๊ป! ที่ 1
+    gain.gain.setValueAtTime(1.0, now + 0.1);
+    gain.gain.setValueAtTime(0.0, now + 0.15);
+    
+    // จังหวะ ปี๊ป! ที่ 2
+    gain.gain.setValueAtTime(1.0, now + 0.2);
+    gain.gain.setValueAtTime(0.0, now + 0.25);
 
-    // เสียง "หน่อง"
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(659.25, now + 0.3); // โน้ต E5
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    gain2.gain.setValueAtTime(1.0, now + 0.3);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-    osc2.start(now + 0.3);
-    osc2.stop(now + 0.8);
+    osc.start(now);
+    osc.stop(now + 0.3);
   } catch(e) {
     console.error("Audio Error:", e);
   }
@@ -1148,30 +1146,21 @@ function renderDiscPanel(reqs) {
   }
   
   body.innerHTML = reqs.map(r => {
-    // 🛒 จัดการดึงรายการสินค้ามาแสดงผลให้สวยงามและอ่านง่าย
-    let itemsHtml = '';
-    if (r.items) {
-       const itemsList = r.items.split(',').map(it => `<div style="padding:2px 0; color:var(--text);">• ${it.trim()}</div>`).join('');
-       itemsHtml = `
-       <div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
-         <div style="color:var(--amber); margin-bottom:4px; font-weight:600;">🛒 สินค้าที่ขอส่วนลด:</div>
-         ${itemsList}
-       </div>`;
-    } else {
-       itemsHtml = `<div style="color:var(--text2); font-size:12px; font-style:italic; margin:8px 0;">(ไม่พบรายการสินค้า)</div>`;
-    }
-
-    // 🔘 สร้างหน้าตาการ์ดแต่ละใบ พร้อมปุ่มกด
+    // 🔘 สร้างหน้าตาการ์ดชั่วคราว เพื่อสแกนดูข้อมูลดิบ
     return `
     <div style="border-bottom:1px solid var(--border); padding:12px 0;">
       <div style="font-size:13px; color:var(--text);">
         👨‍💼 พนักงาน: <b>${r.sellerName || 'ไม่ระบุ'}</b>
       </div>
-      <div style="font-size:15px; color:var(--amber); font-weight:bold; margin-top:4px;">
-        💰 ขอส่วนลดเหลือ: ฿${Number(r.reqPrice).toLocaleString()}
-      </div>
       
-      ${itemsHtml}
+      <div style="margin-top:10px; background:#111; border:1px solid #0f0; border-radius:6px; padding:8px;">
+        <div style="color:#0f0; font-size:12px; margin-bottom:4px; font-weight:bold;">
+          🛠️ ข้อมูลดิบจากระบบ (รบกวนคุณโต้งแคปรูปกล่องนี้ส่งให้ผมทีครับ):
+        </div>
+        <div style="color:#fff; font-size:11px; word-break:break-all;">
+          ${JSON.stringify(r)}
+        </div>
+      </div>
       
       <div style="display:flex; gap:8px; margin-top:10px;">
         <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ</button>
