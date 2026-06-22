@@ -1029,7 +1029,25 @@ async function cancelDiscountRequest() {
   document.getElementById('dr-pulse-txt').style.display = 'block';
   document.getElementById('btn-cancel-req').textContent = '❌ ยกเลิกคำขอ';
 }
-
+// ===== ADMIN: ตอบกลับคำขอส่วนลด (สร้างใหม่) =====
+async function adminReplyDisc(reqId, status) {
+  try {
+    // ส่งคำสั่ง อนุมัติ (approve) หรือ ไม่อนุมัติ (reject) ไปให้ระบบหลังบ้าน
+    const res = await fetch(API_URL + '?action=replyDiscountRequest&reqId=' + reqId + '&status=' + status);
+    const data = await res.json();
+    
+    if (data.ok) {
+      // พอกดสำเร็จ ให้โหลดหน้าต่างแอดมินใหม่ 1 รอบ (เพื่อล้างบิลที่กดไปแล้วออก)
+      adminPollRequests(); 
+    } else {
+      console.error('Error:', data.error);
+      alert('เกิดข้อผิดพลาดจากระบบหลังบ้าน: ' + data.error);
+    }
+  } catch (e) {
+    console.error("Admin Reply Error:", e);
+    alert('เชื่อมต่อระบบขัดข้อง รบกวนลองกดใหม่อีกครั้งครับ');
+  }
+}
 // ===== ADMIN: polling + panel =====
 
 // ===== NOTIFICATION SOUND =====
