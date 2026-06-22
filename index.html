@@ -922,7 +922,7 @@ function onDiscountInput() {
   }
 }
 
-// ===== EMPLOYEE: ส่ง request =====
+// ===== EMPLOYEE: ส่ง request (แบบยัดไส้รายการสินค้า) =====
 async function requestDiscount() {
   const amt = parseFloat(document.getElementById('discount-amount').value) || 0;
   if (amt <= 0) { showToast('ใส่จำนวนส่วนลดก่อนครับ', 'error'); return; }
@@ -939,13 +939,12 @@ async function requestDiscount() {
   document.getElementById('approval-modal').classList.add('open');
 
   try {
-    // 🥷 ทริคบายพาส: เอาชื่อสินค้า คั่นด้วย ||| แล้วฝากไปพร้อมกับชื่อพนักงานเลย!
     const itemsSummary = cart.map(c => `${c.name || 'สินค้ารหัส ' + c.id} (x${c.qty})`).join(', ');
     const smuggledSellerData = currentUser.name + '|||' + itemsSummary;
 
     const urlParams = new URLSearchParams({
       action: 'submitDiscountRequest',
-      seller: smuggledSellerData, // ส่งข้อมูลยัดไส้ไปตรงนี้
+      seller: smuggledSellerData,
       username: currentUser.username,
       amount: amt,
       total: grand
@@ -1029,25 +1028,7 @@ async function cancelDiscountRequest() {
   document.getElementById('dr-pulse-txt').style.display = 'block';
   document.getElementById('btn-cancel-req').textContent = '❌ ยกเลิกคำขอ';
 }
-// ===== ADMIN: ตอบกลับคำขอส่วนลด (สร้างใหม่) =====
-async function adminReplyDisc(reqId, status) {
-  try {
-    // ส่งคำสั่ง อนุมัติ (approve) หรือ ไม่อนุมัติ (reject) ไปให้ระบบหลังบ้าน
-    const res = await fetch(API_URL + '?action=replyDiscountRequest&reqId=' + reqId + '&status=' + status);
-    const data = await res.json();
-    
-    if (data.ok) {
-      // พอกดสำเร็จ ให้โหลดหน้าต่างแอดมินใหม่ 1 รอบ (เพื่อล้างบิลที่กดไปแล้วออก)
-      adminPollRequests(); 
-    } else {
-      console.error('Error:', data.error);
-      alert('เกิดข้อผิดพลาดจากระบบหลังบ้าน: ' + data.error);
-    }
-  } catch (e) {
-    console.error("Admin Reply Error:", e);
-    alert('เชื่อมต่อระบบขัดข้อง รบกวนลองกดใหม่อีกครั้งครับ');
-  }
-}
+
 // ===== ADMIN: polling + panel =====
 
 // ===== NOTIFICATION SOUND =====
@@ -1165,6 +1146,24 @@ async function adminPollRequests() {
   }
 }
 
+// ===== ADMIN: ตอบกลับคำขอส่วนลด (ของแท้ 100%) =====
+async function adminRespond(reqId, action) {
+  try {
+    const res = await fetch(API_URL + '?action=respondDiscount&reqId=' + reqId + '&status=' + action);
+    const data = await res.json();
+    
+    if (data.ok) {
+      showToast(action === 'approved' ? '✅ อนุมัติส่วนลดแล้ว' : '❌ ปฏิเสธแล้ว', action === 'approved' ? 'success' : 'error');
+      adminPollRequests(); 
+    } else {
+      showToast('เกิดข้อผิดพลาดจากระบบ: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch(e) { 
+    showToast('เชื่อมต่อระบบขัดข้อง รบกวนกดใหม่อีกครั้ง', 'error'); 
+  }
+}
+
+// ===== ADMIN: วาดหน้าจอคำขอ (แสดงสินค้า + ปุ่มกดของแท้) =====
 function renderDiscPanel(reqs) {
   const body = document.getElementById('disc-panel-body');
   if (!reqs || reqs.length === 0) {
@@ -1173,17 +1172,13 @@ function renderDiscPanel(reqs) {
   }
   
   body.innerHTML = reqs.map(r => {
-    
-    // 🥷 ทริคบายพาส: แกะข้อมูลที่ยัดไส้มา แยกชื่อพนักงานกับสินค้าออกจากกัน
     let rawSeller = r.sellerName || r.seller || 'ไม่ระบุ';
     let realSellerName = rawSeller;
     let itemsHtml = '';
     
-    // ถ้าเจอสัญลักษณ์ ||| แปลว่ามีการยัดไส้สินค้ามาด้วย
     if (rawSeller.includes('|||')) {
        let parts = rawSeller.split('|||');
        realSellerName = parts[0];
-       
        let itemsList = parts[1].split(',').map(it => `<div style="padding:2px 0; color:var(--text);">• ${it.trim()}</div>`).join('');
        itemsHtml = `
        <div style="background:var(--bg); border:1px dashed var(--amber); border-radius:6px; padding:8px; margin:8px 0; max-height:120px; overflow-y:auto; font-size:12px;">
@@ -1191,7 +1186,7 @@ function renderDiscPanel(reqs) {
          ${itemsList}
        </div>`;
     } else {
-       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ รอรับข้อมูลสินค้า (พนักงานต้องกด Ctrl+F5 ใหม่อีกครั้ง)</div>`;
+       itemsHtml = `<div style="color:var(--red); font-size:12px; font-style:italic; margin:8px 0;">⚠️ รอรับข้อมูลสินค้า (พนักงานต้องกดส่งคำขอใหม่)</div>`;
     }
 
     let total = Number(r.total || 0);
@@ -1219,23 +1214,12 @@ function renderDiscPanel(reqs) {
       ${itemsHtml}
       
       <div style="display:flex; gap:8px; margin-top:10px;">
-        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'approve')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ (เหลือ ฿${finalPrice.toLocaleString()})</button>
-        <button onclick="stopNotifySound(); adminReplyDisc('${r.reqId}', 'reject')" style="flex:1; background:var(--red); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">❌ ไม่อนุมัติ</button>
+        <button class="btn-approve" onclick="if(typeof stopNotifySound === 'function') stopNotifySound(); adminRespond('${r.reqId}', 'approved')" style="flex:1; background:var(--green); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">✅ อนุมัติ</button>
+        <button class="btn-reject" onclick="if(typeof stopNotifySound === 'function') stopNotifySound(); adminRespond('${r.reqId}', 'rejected')" style="flex:1; background:var(--red); color:#fff; border:none; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">❌ ไม่อนุมัติ</button>
       </div>
     </div>`;
   }).join('');
 }
-async function adminRespond(reqId, action) {
-  try {
-    const res = await fetch(API_URL + '?action=respondDiscount&reqId=' + reqId + '&status=' + action);
-    const data = await res.json();
-    if (data.ok) {
-      showToast(action === 'approved' ? '✅ อนุมัติส่วนลดแล้ว' : '❌ ปฏิเสธแล้ว', action === 'approved' ? 'success' : 'error');
-      adminPollRequests(); // refresh
-    }
-  } catch(e) { showToast('เกิดข้อผิดพลาด', 'error'); }
-}
-
 function toggleDiscPanel() {
   const panel = document.getElementById('disc-panel');
   panel.classList.toggle('open');
