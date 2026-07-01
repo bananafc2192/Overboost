@@ -1298,7 +1298,10 @@ function openModal(id) {
   document.getElementById('m-p1').textContent = fmt(currentProd.priceRetail);
   document.getElementById('m-p2').textContent = fmt(currentProd.priceWholesale1);
   document.getElementById('m-p3').textContent = fmt(currentProd.priceWholesale2);
-  document.getElementById('m-stock').textContent = `Stock: ${currentProd.stock} ชิ้น`;
+  
+  // --- 🔥 จุดที่แก้ไขครับ: ปรับ Stock ให้ตัวใหญ่ หนา และเป็นสีแดง ---
+  document.getElementById('m-stock').innerHTML = `<span style="color: #ff3333; font-size: 20px; font-weight: bold;">Stock: ${currentProd.stock} ชิ้น</span>`;
+  
   document.getElementById('m-notice').innerHTML = currentProd.notice ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--amber)">⚠ ${currentProd.notice}</div>` : '';
   const detail = currentProd.detail;
   let specsHtml = '';
