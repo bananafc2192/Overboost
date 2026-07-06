@@ -1550,32 +1550,52 @@ async function renderReport() {
     const _cur = _selEl.value;
     _selEl.innerHTML = '<option value="">ทุกคน</option>';
     _sellers.forEach(u => {
-      const name = USERS[u]?.name || u;
+      const name = (typeof USERS !== 'undefined' && USERS[u]?.name) ? USERS[u].name : u;
       _selEl.innerHTML += `<option value="${u}">${name}</option>`;
     });
     if (_cur) _selEl.value = _cur;
   }
 
-  // แปลง พ.ศ. → ค.ศ. กรณี browser ไทยส่งปีเป็น พ.ศ.
+  // แปลง พ.ศ. → ค.ศ. ให้รองรับทุกรูปแบบ
   let dateInputFixed = dateInput;
   if (dateInput) {
     const parts = dateInput.split('-');
-    const year = parseInt(parts[0]);
-    if (year > 2500) dateInputFixed = `${year - 543}-${parts[1]}-${parts[2]}`;
+    if (parts.length >= 3) {
+       const year = parseInt(parts[0]);
+       const mth = parts[1].padStart(2, '0');
+       const day = parts[2].padStart(2, '0');
+       dateInputFixed = `${year > 2500 ? year - 543 : year}-${mth}-${day}`;
+    }
   }
   let monthInputFixed = monthInput;
   if (monthInput) {
     const parts = monthInput.split('-');
-    const year = parseInt(parts[0]);
-    if (year > 2500) monthInputFixed = `${year - 543}-${parts[1]}`;
+    if (parts.length >= 2) {
+       const year = parseInt(parts[0]);
+       const mth = parts[1].padStart(2, '0');
+       monthInputFixed = `${year > 2500 ? year - 543 : year}-${mth}`;
+    }
   }
 
   const filteredSales = allSales.filter(s => {
     if (!s || !s.time) return false;
     let d = new Date(s.time);
+    
     if (isNaN(d.getTime())) {
-       d = new Date(String(s.time).replace(/-/g, '/').replace('T', ' '));
+       const timeStr = String(s.time).replace('T', ' ');
+       const datePart = timeStr.split(' ')[0]; 
+       const p = datePart.split(/[-/]/); 
+       if (p.length === 3) {
+           let y = parseInt(p[2]);
+           let m = parseInt(p[1]) - 1; 
+           let day = parseInt(p[0]);
+           if (m > 11) { m = parseInt(p[0]) - 1; day = parseInt(p[1]); }
+           if (y > 2500) y -= 543;
+           if (y < 100) y += 2000;
+           d = new Date(y, m, day);
+       }
     }
+    
     if (isNaN(d.getTime())) return false;
 
     // ดึงค่า ปี-เดือน-วัน ตามเวลาท้องถิ่นตรงๆ (แก้บั๊กเดือนกระโดด/ไม่ตรง 100%)
@@ -1622,7 +1642,7 @@ async function renderReport() {
   filteredSales.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
   window._lastSales = filteredSales;
   
-document.getElementById('report-body').innerHTML = filteredSales.map(s => {
+  document.getElementById('report-body').innerHTML = filteredSales.map(s => {
     let d = new Date(s.time);
     if (isNaN(d.getTime())) d = new Date(String(s.time).replace(/-/g, '/').replace('T', ' '));
     const t = isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
