@@ -1642,9 +1642,12 @@ async function renderReport() {
   filteredSales.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
   window._lastSales = filteredSales;
   
+  // ✨ โค้ดส่วนนี้แหละครับที่ดึงวันที่ตัวเล็กๆ มาแสดงเหนือเวลา!
   document.getElementById('report-body').innerHTML = filteredSales.map(s => {
     let d = new Date(s.time);
     if (isNaN(d.getTime())) d = new Date(String(s.time).replace(/-/g, '/').replace('T', ' '));
+    
+    const dateStr = isNaN(d.getTime()) ? '' : d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' });
     const t = isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
     
     const itemsArray = Array.isArray(s.items) ? s.items : [];
@@ -1653,7 +1656,10 @@ async function renderReport() {
     const total = Number(s.total) || 0;
 
     return `<tr>
-      <td>${t}</td>
+      <td>
+        <div style="font-size:11px; color:var(--text2); margin-bottom:2px;">${dateStr}</div>
+        <div>${t}</div>
+      </td>
       <td><span class="seller-badge">${s.sellerName || s.seller || '-'}</span></td>
       <td>${s.customer || '-'}</td>
       <td style="font-size:12px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${itemList}</td>
