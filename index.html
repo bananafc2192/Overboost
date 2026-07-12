@@ -2792,118 +2792,105 @@ document.addEventListener('click', function(e) {
     }
 });
 </script>
-// ========================================================
-// 1. ระบบ Auto-Discovery: สแกนหาฐานข้อมูลสินค้าในระบบของคุณโต้งอัตโนมัติ
-// ========================================================
-window.findProductDatabase = function() {
-    let knownNames = ['products', 'productData', 'allProducts', 'items', 'Data', 'productList'];
-    // หาจากชื่อตัวแปรมาตรฐานก่อน
-    for (let name of knownNames) {
-        if (window[name] && Array.isArray(window[name]) && window[name].length > 0 && typeof window[name][0] === 'object') {
-            return window[name];
-        }
+<script>
+// =====================================================================
+// ระบบดักจับและบังคับการค้นหาใบเสนอราคา (Override Command)
+// ทำตามคำสั่ง: ค้นหาในสต๊อกได้ + พิมพ์นอกสต๊อกได้
+// =====================================================================
+setInterval(() => {
+    // 1. ดักจับช่องค้นหา และบังคับให้ใช้ฟังก์ชันใหม่
+    const searchInput = document.getElementById('qt-product-search');
+    if(searchInput && !searchInput.hasAttribute('data-fixed')) {
+        searchInput.removeAttribute('oninput'); // ฉีกคำสั่งเก่าทิ้ง
+        searchInput.setAttribute('data-fixed', 'true');
+        searchInput.addEventListener('input', function(e) {
+            forceSearchQuote(e.target.value);
+        });
     }
-    // ถ้าไม่เจอ ให้สแกนหา Array ที่ใหญ่ที่สุดในหน้าเว็บที่มีคำว่า price
-    let bestArray = [];
-    for (let key in window) {
-        try {
-            let val = window[key];
-            if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
-                let keys = Object.keys(val[0]).join(',').toLowerCase();
-                // ต้องมีคำว่า price และต้องไม่ใช่ตารางลูกค้า/เคลม
-                if ((keys.includes('price') || keys.includes('price1')) && !keys.includes('symptom')) {
-                    if (val.length > bestArray.length) bestArray = val;
-                }
-            }
-        } catch(e){}
-    }
-    return bestArray;
-};
 
-// ========================================================
-// 2. ฟังก์ชันค้นหาสินค้า (ในสต๊อก)
-// ========================================================
-window.searchQuoteProduct = function(kw) {
+    // 2. ดักจับปุ่มสีเขียว "+ เพิ่มรายการนี้" และบังคับคำสั่งใหม่
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+        if(btn.textContent.includes('เพิ่มรายการนี้') && !btn.hasAttribute('data-fixed')) {
+            btn.removeAttribute('onclick'); // ฉีกคำสั่งเก่าทิ้ง
+            btn.setAttribute('data-fixed', 'true');
+            btn.addEventListener('click', function() {
+                forceAddCustom();
+            });
+        }
+    });
+}, 1000); // เช็คทุกๆ 1 วินาที เพื่อให้มั่นใจว่ายึดคำสั่งได้ 100%
+
+// =====================================================================
+// ฟังก์ชันใหม่ที่บังคับทำงาน (ไม่มีข้อความ Error สีแดงอีกต่อไป)
+// =====================================================================
+function forceSearchQuote(kw) {
     const dropdown = document.getElementById('qt-item-dropdown');
     if(!dropdown) return;
     if(!kw || kw.trim().length === 0) { dropdown.style.display = 'none'; return; }
 
-    const searchWord = kw.toLowerCase().trim();
-    const sourceData = window.findProductDatabase(); // ดึงข้อมูลด้วยระบบอัจฉริยะ
+    const searchKw = kw.toLowerCase().trim();
+    let db = [];
 
-    if (sourceData.length === 0) {
-        dropdown.innerHTML = `<div style="padding:10px; color:#ff4444; font-size:12px; background:#222; border-radius:4px;">❌ ยังโหลดข้อมูลสินค้าไม่เสร็จ (หรือหาฐานข้อมูลไม่พบ)</div>`;
-        dropdown.style.display = 'block';
-        return;
-    }
+    // ดูดข้อมูลจากทุกแหล่งที่เป็นไปได้
+    try {
+        if (typeof products !== 'undefined') db = db.concat(products);
+        if (typeof productData !== 'undefined') db = db.concat(productData);
+        let ls1 = localStorage.getItem('ovb_products');
+        let ls2 = localStorage.getItem('products');
+        if(ls1) db = db.concat(JSON.parse(ls1));
+        if(ls2) db = db.concat(JSON.parse(ls2));
+    } catch(e) {}
 
+    // ค้นหาแบบไม่เอาชื่อซ้ำ
     let results = [];
-    sourceData.forEach(p => {
-        // รองรับตัวแปรทุกรูปแบบ (พิมพ์เล็ก/พิมพ์ใหญ่)
-        let pName = p.name || p.Name || p.title || p.Title || p.product_name || p.id || '';
-        let pSpec = p.detail || p.Detail || p.details || p.description || '';
-        let textForSearch = (pName + ' ' + pSpec).toLowerCase();
-        
-        if (textForSearch.includes(searchWord)) {
-            let fName = pSpec && !pName.includes(pSpec) ? `${pName} (${pSpec})` : pName;
-            let price = parseFloat(p.price || p.Price || p.price1 || 0);
-            
-            // กรองไม่ให้แสดงชื่อซ้ำ
-            if (!results.find(r => r.name === fName)) {
-                results.push({ name: fName, price: price });
-            }
+    let seenNames = new Set();
+    db.forEach(p => {
+        let name = (p.name || p.title || p.product_name || p.id || '').toString();
+        if(!name) return;
+        if(name.toLowerCase().includes(searchKw) && !seenNames.has(name)) {
+            seenNames.add(name);
+            results.push({ name: name, price: parseFloat(p.price || p.price1 || 0) });
         }
     });
 
-    if (results.length === 0) {
-        dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222; border-radius:4px;">ไม่พบสินค้า "${kw}" (กดปุ่ม [+ เพิ่มรายการนี้] เพื่อพิมพ์นอกคลังได้เลย)</div>`;
-        dropdown.style.display = 'block';
-        return;
+    // ถ้าเจอสินค้าในคลัง
+    if(results.length > 0) {
+        dropdown.innerHTML = results.slice(0, 15).map(p => `
+            <div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; color:#fff;"
+                 onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'"
+                 onclick="addQuoteItem('${p.name.replace(/'/g, "\\'")}', ${p.price}); document.getElementById('qt-item-dropdown').style.display='none'; document.getElementById('qt-product-search').value='';">
+                 📦 ${p.name} - ${p.price.toLocaleString()}฿
+            </div>
+        `).join('');
+    } 
+    // ถ้าไม่เจอสินค้าในคลัง (บอกให้กดปุ่มเขียว)
+    else {
+        dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222;">ไม่พบสินค้าในสต๊อก (กดปุ่มสีเขียว [+ เพิ่มรายการนี้] ได้เลยครับ)</div>`;
     }
-
-    dropdown.innerHTML = results.slice(0, 15).map(p => {
-        return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; font-size:13px; color:#fff;" 
-                     onmouseover="this.style.background='#444'" 
-                     onmouseout="this.style.background='transparent'" 
-                     onclick="window.executeAddQuoteItem('${p.name.replace(/'/g, "\\'")}', ${p.price});">
-                     📦 ${p.name} - ${p.price.toLocaleString()}฿
-                </div>`;
-    }).join('');
     dropdown.style.display = 'block';
-};
+}
 
-// ========================================================
-// 3. ฟังก์ชันตัวกลางสำหรับเพิ่มสินค้า (ทั้งในคลังและนอกคลัง)
-// ========================================================
-window.executeAddQuoteItem = function(name, price) {
-    if(typeof window.addQuoteItem === 'function') {
-        window.addQuoteItem(name, price); // เรียกใช้ฟังก์ชันเดิมของระบบ
-    } else if(typeof quoteItems !== 'undefined') {
-        quoteItems.push({ name: name, price: price, qty: 1 });
-        if(typeof renderQuoteItems === 'function') renderQuoteItems();
-    }
-    
-    // เคลียร์ช่องค้นหา
-    const input = document.getElementById('qt-product-search');
-    const dropdown = document.getElementById('qt-item-dropdown');
-    if(input) input.value = '';
-    if(dropdown) dropdown.style.display = 'none';
-};
-
-// ========================================================
-// 4. ฟังก์ชันเพิ่มสินค้านอกคลัง (ปุ่มสีเขียว)
-// ========================================================
-window.addCustomQuoteItem = function() {
+// =====================================================================
+// ฟังก์ชันเพิ่มสินค้านอกคลัง (ปุ่มสีเขียว)
+// =====================================================================
+function forceAddCustom() {
     const input = document.getElementById('qt-product-search');
     if(!input) return;
-    
     const name = input.value.trim();
+    
     if(!name) { 
-        alert('กรุณาพิมพ์ชื่อรายการที่ต้องการเพิ่ม ในช่องค้นหาครับ'); 
+        alert('กรุณาพิมพ์ชื่อสินค้า ที่ต้องการเพิ่มนอกคลังครับ'); 
         return; 
     }
     
-    window.executeAddQuoteItem(name, 0); // เพิ่มสินค้าโดยให้ราคาเริ่มต้นเป็น 0
-};
+    // เรียกใช้ฟังก์ชันเดิมของระบบเพื่อเพิ่มลงตาราง (ราคาตั้งต้น 0 บาท)
+    if(typeof addQuoteItem === 'function') {
+        addQuoteItem(name, 0);
+    }
+    input.value = '';
+    document.getElementById('qt-item-dropdown').style.display = 'none';
+}
+</script>
 </body>
 </html>
