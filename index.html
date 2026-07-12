@@ -2573,23 +2573,43 @@ function closeQuoteModal() { document.getElementById('quote-modal').style.displa
 function searchQuoteProduct(kw) {
   const dropdown = document.getElementById('qt-item-dropdown');
   if(!kw.trim()) { dropdown.style.display = 'none'; return; }
+  
   let availableProducts = [];
-  if (typeof products !== 'undefined' && Array.isArray(products)) availableProducts = products;
-  else if (typeof productData !== 'undefined' && Array.isArray(productData)) availableProducts = productData;
+  if (typeof products !== 'undefined' && Array.isArray(products) && products.length > 0) availableProducts = products;
+  else if (typeof productData !== 'undefined' && Array.isArray(productData) && productData.length > 0) availableProducts = productData;
   else {
      try { 
         const cache = localStorage.getItem('ovb_products') || localStorage.getItem('products');
         if(cache) availableProducts = JSON.parse(cache);
      } catch(e){}
   }
-  if(availableProducts.length === 0) { dropdown.style.display = 'none'; return; }
+  
+  // 🚨 ถ้าไม่มีฐานข้อมูลในเครื่อง (เช่น ตอนเทส Local) จะแจ้งเตือนสีแดง
+  if(availableProducts.length === 0) { 
+      dropdown.innerHTML = `<div style="padding:10px; color:#ff4444; font-size:12px; background:#222; border-radius:4px;">❌ ยังไม่ได้โหลดข้อมูลสต๊อกสินค้า (โปรดรอสักครู่ หรือไปหน้าสินค้าก่อนครับ)</div>`;
+      dropdown.style.display = 'block'; 
+      return; 
+  }
+  
   const filtered = availableProducts.filter(p => (p.name || p.title || p.product_name || '').toLowerCase().includes(kw.toLowerCase())).slice(0, 15);
-  if(filtered.length === 0) { dropdown.style.display = 'none'; return; }
+  
+  // 🚨 ถ้าพิมพ์ชื่อแล้วหาไม่เจอในคลัง
+  if(filtered.length === 0) { 
+      dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222; border-radius:4px;">ไม่พบสินค้า "${kw}" ในคลัง... (กด + เพิ่มรายการนี้ เพื่อพิมพ์ชื่อเองได้เลย)</div>`;
+      dropdown.style.display = 'block'; 
+      return; 
+  }
+  
   dropdown.innerHTML = filtered.map(p => {
-     const pName = p.name || p.title || p.product_name || 'ไม่ทราบชื่อสินค้า';
-     const pPrice = p.price || 0;
-     return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; font-size:13px; color:#fff;" onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'" onclick="addQuoteItem('${pName.replace(/'/g, "\\'")}', ${pPrice})">📦 ${pName} - ${pPrice.toLocaleString()}฿</div>`;
+     // ดึงชื่อและสเปค
+     const baseName = p.name || p.title || p.product_name || 'ไม่ทราบชื่อสินค้า';
+     const specs = p.detail || p.Detail || p.details || "";
+     const pName = specs ? `${baseName} (${specs})` : baseName;
+     const pPrice = p.price || p.price1 || 0;
+     
+     return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; font-size:13px; color:#fff;" onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'" onclick="addQuoteItem('${pName.replace(/'/g, "\\'")}', ${pPrice})">📦 ${pName} - ${parseFloat(pPrice).toLocaleString()}฿</div>`;
   }).join('');
+  
   dropdown.style.display = 'block';
 }
 
