@@ -2574,83 +2574,79 @@ function closeQuoteModal() {
 
 function searchQuoteProduct(kw) {
     const dropdown = document.getElementById('qt-item-dropdown');
-    if(!kw || kw.trim().length === 0) { dropdown.style.display = 'none'; return; }
+    if(!dropdown) return;
     
-    const searchWord = kw.toLowerCase().trim();
-    let results = [];
-    let sourceData = [];
-
-    // 1. ดึงข้อมูลจากคลังสินค้าเท่านั้น (ไม่ไปกวาดมั่วจากหน้าจอแล้ว)
-    if (typeof products !== 'undefined' && Array.isArray(products) && products.length > 0) {
-        sourceData = products;
-    } else if (typeof productData !== 'undefined' && Array.isArray(productData) && productData.length > 0) {
-        sourceData = productData;
-    } else {
-        try {
-            let cached = localStorage.getItem('ovb_products') || localStorage.getItem('products');
-            if (cached) sourceData = JSON.parse(cached);
-        } catch(e) {}
+    const searchWord = (kw || '').trim().toLowerCase();
+    if(searchWord.length === 0) { 
+        dropdown.style.display = 'none'; 
+        return; 
     }
 
-    // 2. ค้นหาสินค้า
-    if (sourceData.length > 0) {
-        sourceData.forEach(p => {
-            let textForSearch = ((p.name||'') + ' ' + (p.product_name||'') + ' ' + (p.detail||'') + ' ' + (p.id||'')).toLowerCase();
-            if(textForSearch.includes(searchWord)) {
-                let bName = p.name || p.title || p.product_name || 'ไม่ทราบชื่อ';
-                let specs = p.detail || p.Detail || p.details || "";
-                let fName = (specs && !bName.includes(specs)) ? `${bName} (${specs})` : bName;
-                let price = parseFloat(p.price || p.price1 || p.Price || 0);
+    let results = [];
+    let seen = new Set();
+    
+    /* กวาดข้อมูลจากหน้าเว็บโดยตรง (อ้างอิงจาก CSS ของคุณโต้ง: .product-card) */
+    const productCards = document.querySelectorAll('.product-card');
+    
+    if (productCards && productCards.length > 0) {
+        productCards.forEach(card => {
+            const nameEl = card.querySelector('.prod-name');
+            const priceEl = card.querySelector('.prod-price');
+            
+            if (nameEl && priceEl) {
+                const name = (nameEl.innerText || nameEl.textContent).trim();
+                const rawPrice = priceEl.innerText || priceEl.textContent;
+                const priceNum = parseFloat(rawPrice.replace(/[^0-9.-]+/g, '')) || 0;
                 
-                // เช็คไม่ให้ซ้ำ
-                if (!results.find(r => r.name === fName)) {
-                    results.push({ name: fName, price: price });
+                if (name.toLowerCase().includes(searchWord) && !seen.has(name)) {
+                    seen.add(name);
+                    results.push({ name: name, price: priceNum });
                 }
             }
         });
     }
 
-    // 3. แสดงผล
-    if (results.length === 0) {
-        if (sourceData.length === 0) {
-             dropdown.innerHTML = `<div style="padding:10px; color:#ff4444; font-size:12px; background:#222; border-radius:4px;">❌ ยังไม่ได้โหลดข้อมูลสินค้า (โปรดเข้าเมนู "สินค้า" ก่อน 1 ครั้งเพื่อให้ระบบจำสต๊อกครับ)</div>`;
-        } else {
-             dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222; border-radius:4px;">ไม่พบสินค้า "${kw}" (กดปุ่ม + เพิ่มรายการนี้ เพื่อพิมพ์ชื่อเองได้เลยครับ)</div>`;
-        }
-        dropdown.style.display = 'block';
-        return;
+    /* แสดงผลลัพธ์ */
+    if(results.length > 0) {
+        dropdown.innerHTML = results.slice(0, 15).map(p => `
+            <div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; color:#fff; font-size:13px;"
+                 onmouseover="this.style.background='#444'" 
+                 onmouseout="this.style.background='transparent'"
+                 onclick="addQuoteItem('${p.name.replace(/'/g, "\\'")}', ${p.price}); document.getElementById('qt-item-dropdown').style.display='none'; document.getElementById('qt-product-search').value='';">
+                 📦 ${p.name} - ฿${p.price.toLocaleString()}
+            </div>
+        `).join('');
+    } else {
+        dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px;">ไม่พบสินค้าในสต๊อก<br>(กดปุ่มสีเขียว "+ เพิ่มรายการนี้" เพื่อพิมพ์นอกสต๊อกได้เลยครับ)</div>`;
     }
-
-    dropdown.innerHTML = results.slice(0, 15).map(p => {
-        return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; font-size:13px; color:#fff;" 
-                     onmouseover="this.style.background='#444'" 
-                     onmouseout="this.style.background='transparent'" 
-                     onclick="addQuoteItem('${p.name.replace(/'/g, "\\'")}', ${p.price})">
-                     📦 ${p.name} - ${p.price.toLocaleString()}฿
-                </div>`;
-    }).join('');
+    
     dropdown.style.display = 'block';
 }
+
 function addQuoteItem(name, price) {
     quoteItems.push({ name: name, price: price, qty: 1 });
-    if(document.getElementById('qt-product-search')) document.getElementById('qt-product-search').value = '';
-    if(document.getElementById('qt-item-dropdown')) document.getElementById('qt-item-dropdown').style.display = 'none';
+    document.getElementById('qt-product-search').value = '';
+    document.getElementById('qt-item-dropdown').style.display = 'none';
     renderQuoteItems();
 }
 
 function addCustomQuoteItem() {
     const input = document.getElementById('qt-product-search');
     if(!input) return;
+    
     const name = input.value.trim();
     if(!name) { 
-        if (typeof showToast === 'function') showToast('❌ กรุณาพิมพ์ชื่อรายการก่อนกดเพิ่มครับ', 'error');
-        else alert('กรุณาพิมพ์ชื่อรายการก่อนกดเพิ่มครับ');
+        alert('กรุณาพิมพ์ชื่อรายการก่อนกดเพิ่มครับ'); 
         return; 
     }
-    quoteItems.push({ name: name, price: 0, qty: 1 });
+    
+    /* เพิ่มสินค้านอกคลัง (ตั้งราคา 0) */
+    addQuoteItem(name, 0);
+    
+    /* ล้างช่อง */
     input.value = '';
-    document.getElementById('qt-item-dropdown').style.display = 'none';
-    renderQuoteItems();
+    const dropdown = document.getElementById('qt-item-dropdown');
+    if(dropdown) dropdown.style.display = 'none';
 }
 
 function removeQuoteItem(index) { quoteItems.splice(index, 1); renderQuoteItems(); }
