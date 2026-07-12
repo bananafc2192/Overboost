@@ -2574,52 +2574,63 @@ function closeQuoteModal() {
 
 function searchQuoteProduct(kw) {
     const dropdown = document.getElementById('qt-item-dropdown');
-    if(!dropdown) return;
     if(!kw || kw.trim().length === 0) { dropdown.style.display = 'none'; return; }
+    
+    const searchWord = kw.toLowerCase().trim();
+    let results = [];
+    let sourceData = [];
 
-    let availableProducts = [];
-    if (typeof products !== 'undefined' && Array.isArray(products) && products.length > 0) availableProducts = products;
-    else if (typeof productData !== 'undefined' && Array.isArray(productData) && productData.length > 0) availableProducts = productData;
-    else {
-       try { 
-          const cache = localStorage.getItem('ovb_products') || localStorage.getItem('products');
-          if(cache) availableProducts = JSON.parse(cache);
-       } catch(e){}
+    // 1. ดึงข้อมูลจากคลังสินค้าเท่านั้น (ไม่ไปกวาดมั่วจากหน้าจอแล้ว)
+    if (typeof products !== 'undefined' && Array.isArray(products) && products.length > 0) {
+        sourceData = products;
+    } else if (typeof productData !== 'undefined' && Array.isArray(productData) && productData.length > 0) {
+        sourceData = productData;
+    } else {
+        try {
+            let cached = localStorage.getItem('ovb_products') || localStorage.getItem('products');
+            if (cached) sourceData = JSON.parse(cached);
+        } catch(e) {}
     }
 
-    if(availableProducts.length === 0) {
-        dropdown.innerHTML = `<div style="padding:10px; color:#ff4444; font-size:12px; background:#222; border-radius:4px;">❌ ยังไม่ได้โหลดข้อมูลสต๊อกสินค้า</div>`;
+    // 2. ค้นหาสินค้า
+    if (sourceData.length > 0) {
+        sourceData.forEach(p => {
+            let textForSearch = ((p.name||'') + ' ' + (p.product_name||'') + ' ' + (p.detail||'') + ' ' + (p.id||'')).toLowerCase();
+            if(textForSearch.includes(searchWord)) {
+                let bName = p.name || p.title || p.product_name || 'ไม่ทราบชื่อ';
+                let specs = p.detail || p.Detail || p.details || "";
+                let fName = (specs && !bName.includes(specs)) ? `${bName} (${specs})` : bName;
+                let price = parseFloat(p.price || p.price1 || p.Price || 0);
+                
+                // เช็คไม่ให้ซ้ำ
+                if (!results.find(r => r.name === fName)) {
+                    results.push({ name: fName, price: price });
+                }
+            }
+        });
+    }
+
+    // 3. แสดงผล
+    if (results.length === 0) {
+        if (sourceData.length === 0) {
+             dropdown.innerHTML = `<div style="padding:10px; color:#ff4444; font-size:12px; background:#222; border-radius:4px;">❌ ยังไม่ได้โหลดข้อมูลสินค้า (โปรดเข้าเมนู "สินค้า" ก่อน 1 ครั้งเพื่อให้ระบบจำสต๊อกครับ)</div>`;
+        } else {
+             dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222; border-radius:4px;">ไม่พบสินค้า "${kw}" (กดปุ่ม + เพิ่มรายการนี้ เพื่อพิมพ์ชื่อเองได้เลยครับ)</div>`;
+        }
         dropdown.style.display = 'block';
         return;
     }
 
-    const filtered = availableProducts.filter(p => 
-        (p.name || p.title || p.product_name || '').toLowerCase().includes(kw.toLowerCase())
-    ).slice(0, 15);
-
-    if(filtered.length === 0) {
-        dropdown.innerHTML = `<div style="padding:10px; color:#aaa; font-size:12px; background:#222; border-radius:4px;">ไม่พบสินค้า "${kw}"</div>`;
-        dropdown.style.display = 'block';
-        return;
-    }
-
-    dropdown.innerHTML = filtered.map(p => {
-        const baseName = p.name || p.title || p.product_name || 'ไม่ทราบชื่อ';
-        const specs = p.detail || p.Detail || p.details || "";
-        const pName = specs ? `${baseName} (${specs})` : baseName;
-        const pPrice = parseFloat(p.price || p.price1 || 0);
-        
-        return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; color:#fff; font-size:13px;" 
+    dropdown.innerHTML = results.slice(0, 15).map(p => {
+        return `<div style="padding:10px; border-bottom:1px solid #444; cursor:pointer; font-size:13px; color:#fff;" 
                      onmouseover="this.style.background='#444'" 
                      onmouseout="this.style.background='transparent'" 
-                     onclick="addQuoteItem('${pName.replace(/'/g, "\\'")}', ${pPrice})">
-                     📦 ${pName} - ${pPrice.toLocaleString()}฿
+                     onclick="addQuoteItem('${p.name.replace(/'/g, "\\'")}', ${p.price})">
+                     📦 ${p.name} - ${p.price.toLocaleString()}฿
                 </div>`;
     }).join('');
-    
     dropdown.style.display = 'block';
 }
-
 function addQuoteItem(name, price) {
     quoteItems.push({ name: name, price: price, qty: 1 });
     if(document.getElementById('qt-product-search')) document.getElementById('qt-product-search').value = '';
