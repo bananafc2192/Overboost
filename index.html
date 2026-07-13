@@ -2197,16 +2197,23 @@ async function reprintFromHistory(saleId) {
         <textarea id="qt-address" placeholder="ที่อยู่ลูกค้า" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:50px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
       </div>
 
-      <div style="background:#2a2a2a; padding:12px; border-radius:6px; margin-bottom:15px; border:1px solid #444;">
-        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:5px;">🔍 ค้นหาสินค้า หรือ พิมพ์ชื่อรายการที่ต้องการเพิ่มเอง:</label>
-        <div style="display:flex; gap:10px; width:100%;">
-          <div style="position:relative; flex:1;">
-            <input type="text" id="qt-product-search" placeholder="พิมพ์ชื่อสินค้าเพื่อค้นหา หรือพิมพ์รายการนอกคลัง..." style="width:100%; padding:10px; background:#121212; border:1px solid #444; color:#fff; border-radius:4px; box-sizing:border-box;" onkeyup="searchQuoteProduct(this.value)" onclick="searchQuoteProduct(this.value)" autocomplete="off">
-            <div id="qt-item-dropdown" style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:#2a2a2a; border:1px solid #555; border-radius:4px; z-index:1000; box-shadow: 0 4px 8px rgba(0,0,0,0.5);"></div>
-          </div>
-          <button onclick="addCustomQuoteItem()" style="background:#22c55e; color:#fff; border:none; padding:0 15px; border-radius:4px; cursor:pointer; font-weight:bold; white-space:nowrap;">+ เพิ่มรายการนี้</button>
-        </div>
-      </div>
+<div style="background:#2a2a2a; padding:12px; border-radius:6px; margin-bottom:15px; border:1px solid #444;">
+    <label style="font-size:13px; color:#60a5fa; display:block; margin-bottom:8px; font-weight:bold;">
+        📋 ไปก๊อปปี้ชื่อสินค้าจากหน้าเว็บมาวาง (Paste) หรือพิมพ์ชื่อเอง:
+    </label>
+    <div style="display:flex; gap:10px; width:100%;">
+        <button type="button" onclick="goToProducts()" style="background:#3b82f6; color:#fff; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold; white-space:nowrap;">
+            🔍 ไปหน้าสินค้า
+        </button>
+        <input type="text" id="qt-product-search" 
+               placeholder="คลิกขวา -> วาง (Paste) ชื่อสินค้าที่นี่..." 
+               style="flex:1; padding:10px; background:#121212; border:1px solid #444; color:#fff; border-radius:4px;" 
+               autocomplete="off">
+        <button type="button" onclick="addCustomQuoteItem()" style="background:#22c55e; color:#fff; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-weight:bold; white-space:nowrap;">
+            + เพิ่มรายการนี้
+        </button>
+    </div>
+</div>
 
       <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:10px;">
         <div style="display:grid; grid-template-columns: 2fr 70px 100px 100px 30px; gap:5px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:5px; font-size:12px; color:#aaa; text-align:center;">
