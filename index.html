@@ -1272,6 +1272,7 @@ function renderProducts() {
       <div class="prod-price-sub">ส่ง: ${fmt(p.priceWholesale1)} / ${fmt(p.priceWholesale2)}</div>
       ${p.notice ? `<div class="notice-badge">⚠ ${p.notice.substring(0,30)}...</div>` : ''}
       <button class="btn-addcart" onclick="event.stopPropagation();quickAdd('${p.id}')" ${!inStock ? 'disabled' : ''}>+ ใส่ตะกร้า</button>
+      <button class="btn-addcart" style="background:#3b82f6; margin-top:5px;" onclick="event.stopPropagation(); sendToQuote('${p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${p.priceRetail || 0})">📋 + ใบเสนอราคา</button>
     </div>`;
   }).join('');
 
@@ -2591,7 +2592,31 @@ function addCustomQuoteItem() {
     input.value = '';
     renderQuoteItems();
 }
-
+function sendToQuote(name, price) {
+    // 1. โยนสินค้าเข้า Array ใบเสนอราคา (จำนวนเริ่มที่ 1)
+    quoteItems.push({ name: name, price: price, qty: 1 });
+    
+    // 2. อัปเดตตาราง (เผื่อว่าคุณโต้งเปิดหน้าต่างใบเสนอราคาค้างไว้อยู่)
+    if (typeof renderQuoteItems === 'function') {
+        renderQuoteItems();
+    }
+    
+    // 3. แจ้งเตือนสวยๆ ว่าเพิ่มสำเร็จแล้ว
+    if (typeof showToast === 'function') {
+        showToast('✅ เพิ่มลงใบเสนอราคาแล้ว', 'success');
+    } else {
+        // ถ้าเว็บคุณโต้งไม่มีระบบ Toast ให้สร้างกล่องข้อความเด้งขึ้นมาแทนชั่วคราว
+        let msgBox = document.createElement('div');
+        msgBox.innerHTML = `✅ เพิ่ม <b>${name}</b> ลงใบเสนอราคาแล้ว!`;
+        msgBox.style.cssText = 'position:fixed; bottom:20px; right:20px; background:#22c55e; color:#fff; padding:12px 20px; border-radius:6px; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:14px; animation: fadein 0.5s;';
+        document.body.appendChild(msgBox);
+        setTimeout(() => {
+            msgBox.style.opacity = '0';
+            msgBox.style.transition = 'opacity 0.5s';
+            setTimeout(() => msgBox.remove(), 500);
+        }, 2000); // โชว์ 2 วินาทีแล้วหายไป
+    }
+}
 // ลบ/อัปเดต รายการในตาราง
 function removeQuoteItem(index) { quoteItems.splice(index, 1); renderQuoteItems(); }
 function updateQuoteItemQty(index, val) { quoteItems[index].qty = parseInt(val) || 1; renderQuoteItems(); }
@@ -2620,16 +2645,170 @@ function renderQuoteItems() {
     if(document.getElementById('qt-grand-total')) document.getElementById('qt-grand-total').textContent = grandTotal.toLocaleString();
 }
 
-// พิมพ์ใบเสนอราคา
-function processQuote() {
-    const cust = document.getElementById('qt-cust').value.trim();
-    if(!cust || quoteItems.length === 0) { alert('กรุณากรอกชื่อลูกค้าและเพิ่มสินค้าครับ'); return; }
+<!-- ... existing code ... -->
+// แสดงตาราง
+function renderQuoteItems() {
+    const container = document.getElementById('qt-items-container');
+    if(!container) return;
     
-    // โค้ดส่วนพิมพ์ใบเสนอราคาเดิมของคุณโต้ง...
-    window.print();
-    closeQuoteModal();
+    let html = '';
+    let grandTotal = 0;
+    quoteItems.forEach((item, index) => {
+        grandTotal += (item.price * item.qty);
+        html += `
+        <div style="display:grid; grid-template-columns: 2fr 70px 100px 100px 30px; gap:5px; margin-bottom:5px; align-items:center;">
+            <input type="text" value="${item.name}" onchange="updateQuoteItemName(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px;">
+            <input type="number" min="1" value="${item.qty}" onchange="updateQuoteItemQty(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:center;">
+            <input type="number" min="0" value="${item.price}" onchange="updateQuoteItemPrice(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:right;">
+            <div style="text-align:right; color:#fff;">${(item.price * item.qty).toLocaleString()}</div>
+            <button onclick="removeQuoteItem(${index})" style="background:transparent; border:none; color:#ff3333; cursor:pointer;">🗑️</button>
+        </div>`;
+    });
+    container.innerHTML = html;
+    if(document.getElementById('qt-grand-total')) document.getElementById('qt-grand-total').textContent = grandTotal.toLocaleString();
+}
+
+// พิมพ์ใบเสนอราคา (เวอร์ชันสมบูรณ์ มีโลโก้ + หน้ากระดาษ A4)
+function processQuote() {
+    const cust = document.getElementById('qt-cust') ? document.getElementById('qt-cust').value.trim() : 'ลูกค้าทั่วไป';
+    
+    // ดึงเบอร์โทรลูกค้า (ถ้ามีช่องเบอร์โทร)
+    const phoneInput = document.getElementById('qt-phone'); 
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    
+    if(!cust || quoteItems.length === 0) { 
+        alert('กรุณากรอกชื่อลูกค้าและเพิ่มสินค้าก่อนพิมพ์ครับ'); 
+        return; 
+    }
+    
+    // 1. สร้างหน้ากระดาษ A4 ซ่อนไว้เบื้องหลัง
+    let printDiv = document.getElementById('quote-print-layout');
+    if (printDiv) printDiv.remove();
+    
+    printDiv = document.createElement('div');
+    printDiv.id = 'quote-print-layout';
+    document.body.appendChild(printDiv);
+
+    // 2. เตรียมข้อมูลตารางสินค้า
+    let rowsHtml = '';
+    let grandTotal = 0;
+    quoteItems.forEach((item, index) => {
+        let rowTotal = item.price * item.qty;
+        grandTotal += rowTotal;
+        rowsHtml += `
+            <tr style="border-bottom: 1px solid #ccc;">
+                <td style="padding: 12px 8px; text-align: center; border-right: 1px solid #ccc;">${index + 1}</td>
+                <td style="padding: 12px 8px; border-right: 1px solid #ccc;">${item.name}</td>
+                <td style="padding: 12px 8px; text-align: center; border-right: 1px solid #ccc;">${item.qty}</td>
+                <td style="padding: 12px 8px; text-align: right; border-right: 1px solid #ccc;">${item.price.toLocaleString()}</td>
+                <td style="padding: 12px 8px; text-align: right;">${rowTotal.toLocaleString()}</td>
+            </tr>
+        `;
+    });
+
+    // วันที่ และ เลขที่บิล
+    const d = new Date();
+    const dateStr = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+    const quoteId = `QT${d.getFullYear().toString().substring(2)}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}-${Math.floor(Math.random()*1000)}`;
+
+    // 3. วาดหน้าตาบิล A4 + โลโก้และข้อมูลร้านคุณโต้ง
+    printDiv.innerHTML = `
+        <div style="font-family: 'Sarabun', 'Segoe UI', sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff;">
+            
+            <!-- ส่วนหัวบิล -->
+            <div style="text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 15px;">
+                <!-- โซนโลโก้ 3 รูป (เรียงใหม่: Overboost -> Alpha -> Banana) -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 15px;">
+                    <img src="logo.png" style="height: 55px;" alt="Overboost">
+                    <img src="logo2.png" style="height: 55px;" alt="Alpha Photo">
+                    <img src="logo3.jpg" style="height: 65px; border-radius: 8px;" alt="Banana Partner">
+                </div>
+                
+                <h2 style="margin: 0 0 8px 0; font-size: 22px; color: #1e3a8a; font-weight: bold; text-decoration: underline;">ใบเสนอราคา (QUOTATION)</h2>
+                <h3 style="margin: 0 0 5px 0; font-size: 19px; font-weight: bold;">บจก.โอเวอร์บูสท์คอมพิวเตอร์ (สำนักงานใหญ่)</h3>
+                <p style="margin: 3px 0; font-size: 14px;">Banana เทคโนภาคฯ เลขที่ 191/7 หมู่ 17 ต.ในเมือง อ.เมืองขอนแก่น จ.ขอนแก่น</p>
+                <p style="margin: 3px 0; font-size: 14px;"><strong>Tax :</strong> 0405564007693 &nbsp;|&nbsp; <strong>โทร.</strong> 065-6625622</p>
+                <p style="margin: 3px 0; font-size: 13px; color: #333;">อัลฟ่าไอที ตึกแก่นมาเก็ต(ตึกคอม) โทร. 084-5535526 หรือ 098-2035760</p>
+            </div>
+            
+            <!-- ข้อมูลลูกค้าและบิล -->
+            <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 15px;">
+                <div style="width: 60%;">
+                    <p style="margin: 4px 0;"><strong>ชื่อลูกค้า:</strong> ${cust}</p>
+                    <p style="margin: 4px 0;"><strong>เบอร์ติดต่อ:</strong> ${phone}</p>
+                </div>
+                <div style="width: 35%; text-align: right;">
+                    <p style="margin: 4px 0;"><strong>เลขที่ใบเสนอราคา:</strong> ${quoteId}</p>
+                    <p style="margin: 4px 0;"><strong>วันที่:</strong> ${dateStr}</p>
+                </div>
+            </div>
+            
+            <!-- ตารางสินค้า -->
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 15px; border: 1px solid #000;">
+                <thead>
+                    <tr style="background-color: #f3f4f6; border-bottom: 2px solid #000;">
+                        <th style="padding: 10px; text-align: center; width: 50px; border-right: 1px solid #ccc;">ลำดับ</th>
+                        <th style="padding: 10px; text-align: left; border-right: 1px solid #ccc;">รายการสินค้า</th>
+                        <th style="padding: 10px; text-align: center; width: 80px; border-right: 1px solid #ccc;">จำนวน</th>
+                        <th style="padding: 10px; text-align: right; width: 110px; border-right: 1px solid #ccc;">ราคา/หน่วย</th>
+                        <th style="padding: 10px; text-align: right; width: 120px;">จำนวนเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" style="padding: 12px; text-align: right; font-weight: bold; border-top: 2px solid #000; border-right: 1px solid #ccc;">ยอดรวมสุทธิ (Grand Total):</td>
+                        <td style="padding: 12px; text-align: right; font-weight: bold; border-top: 2px solid #000; color: #dc2626; font-size: 16px;">${grandTotal.toLocaleString()} บาท</td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <!-- ลายเซ็น -->
+            <div style="display: flex; justify-content: space-around; margin-top: 80px; text-align: center; font-size: 15px;">
+                <div>
+                    <p>_________________________</p>
+                    <p>( ..................................................... )</p>
+                    <p>ผู้เสนอราคา</p>
+                </div>
+                <div>
+                    <p>_________________________</p>
+                    <p>( ..................................................... )</p>
+                    <p>ผู้อนุมัติสั่งซื้อ</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 4. ใส่ CSS เฉพาะสำหรับการสั่ง Print
+    let printStyle = document.getElementById('quote-print-style');
+    if (!printStyle) {
+        printStyle = document.createElement('style');
+        printStyle.id = 'quote-print-style';
+        printStyle.innerHTML = `
+            @media print {
+                body * { visibility: hidden !important; }
+                #quote-print-layout, #quote-print-layout * { visibility: visible !important; color: #000 !important; }
+                #quote-print-layout { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
+                /* บังคับซ่อน Modal และพื้นหลังสีดำ */
+                #quote-modal { display: none !important; }
+                .modal-overlay { display: none !important; }
+            }
+            @media screen {
+                #quote-print-layout { display: none; }
+            }
+        `;
+        document.head.appendChild(printStyle);
+    }
+
+    // 5. สั่งพิมพ์! (หน่วงเวลา 0.5 วินาที เพื่อให้บราวเซอร์มีเวลาโหลดโลโก้มาแสดงให้ครบก่อน)
+    setTimeout(() => {
+        window.print();
+    }, 500);
 }
 // --- จบโซนระบบใบเสนอราคา ---
+<!-- ... existing code ... -->
 </script>
 </body>
 </html>
