@@ -2803,7 +2803,34 @@ function processQuote() {
         document.head.appendChild(printStyle);
     }
 
-    // 5. สั่งพิมพ์! (หน่วงเวลา 0.5 วินาที เพื่อให้บราวเซอร์มีเวลาโหลดโลโก้มาแสดงให้ครบก่อน)
+    // 5. ส่งข้อมูลบันทึกลง Google Sheet (ทำแบบเงียบๆ เบื้องหลัง)
+    try {
+        // รวบรวมรายการสินค้าให้เป็นข้อความยาวๆ เพื่อลงช่อง G (Items)
+        let itemsForSheet = quoteItems.map((it, i) => `${i+1}. ${it.name} (x${it.qty}) = ${(it.price * it.qty).toLocaleString()} ฿`).join('\\n');
+        
+        // ดึง URL ตัวเดียวกันกับที่คุณโต้งใช้บันทึกประวัติเคลม
+        let targetUrl = typeof scriptUrl !== 'undefined' ? scriptUrl : (typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : '');
+        
+        if(targetUrl) {
+            fetch(targetUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'saveQuote', // ตรงกับโค้ด Apps Script ฝั่งรับ
+                    data: {
+                        id: quoteId,
+                        date: dateStr,
+                        cust: cust,
+                        phone: phone,
+                        total: grandTotal,
+                        seller: 'หน้าร้าน', 
+                        items: itemsForSheet
+                    }
+                })
+            }).catch(e => console.log("บันทึกชีตไม่สำเร็จ: ", e));
+        }
+    } catch(err) {}
+
+    // 6. สั่งพิมพ์! (หน่วงเวลา 0.5 วินาที ให้รูปขึ้นและให้ข้อมูลส่งเสร็จ)
     setTimeout(() => {
         window.print();
     }, 500);
