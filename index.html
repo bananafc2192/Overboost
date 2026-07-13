@@ -88,6 +88,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   border: none; border-radius: 6px; color: #fff; font-size: 13px;
   cursor: pointer; font-weight: 600;
 }
+<!-- ... existing code ... -->
 .cart-badge {
   position: absolute; top: -6px; right: -6px;
   background: #fff; color: var(--red); font-size: 11px; font-weight: 700;
@@ -95,12 +96,19 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   display: flex; align-items: center; justify-content: center;
 }
 
-.page { display: none; padding: 20px; max-width: 1400px; margin: 0 auto; }
+/* 🟢 ทุบกำแพง! บังคับให้หน้าเว็บหลักกางเต็มจอ ไม่หดอยู่ตรงกลาง */
+.page { 
+  display: none; padding: 20px; 
+  max-width: 100% !important; /* <--- เปลี่ยนเป็น 100% ให้เต็มจอไปเลย */
+  width: 100% !important; 
+  margin: 0 auto; 
+}
 .page.active { display: block; }
 
 /* ===== PRODUCTS PAGE ===== */
 .search-bar {
   display: flex; gap: 10px; margin-bottom: 16px;
+  width: 100% !important; /* ให้ช่องค้นหายืดเต็มจอด้วย */
 }
 .search-bar input {
   flex: 1; padding: 10px 16px; background: var(--bg2);
@@ -114,14 +122,21 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   color: var(--text); font-size: 14px; cursor: pointer;
 }
 .products-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  display: grid; 
+  /* บังคับ Grid กางเต็มที่ และขนาดกล่องพอดีคำที่ 200px */
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  gap: 15px;
+  width: 100% !important;
 }
 .product-card {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 10px; padding: 14px; cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
   position: relative; overflow: hidden;
+  /* บังคับกล่องให้ยืดความสูงเต็มเท่ากันทุกใบ */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 .product-card:hover { border-color: var(--red); transform: translateY(-2px); }
 .product-card .prod-img {
@@ -136,7 +151,10 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
 }
 .prod-id { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
 .prod-name { font-size: 13px; font-weight: 500; line-height: 1.4; margin-bottom: 8px; min-height: 36px; }
-.prod-price { font-size: 17px; font-weight: 700; color: var(--red); }
+
+/* 🟢 ดันกลุ่มราคาและปุ่มให้ตกไปอยู่ขอบล่างสุดเสมอ */
+.prod-price { font-size: 17px; font-weight: 700; color: var(--red); margin-top: auto; }
+
 .prod-price-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
 .prod-stock {
   position: absolute; top: 10px; right: 10px;
