@@ -2854,149 +2854,67 @@ function processQuote() {
     }, 500);
 }
 // --- จบโซนระบบใบเสนอราคา ---
+<!-- ... existing code ... -->
+</script>
+<!-- ========================================== -->
+<!-- 💰 ระบบมัดจำ (แบบแทรกอัตโนมัติ ปลอดภัย 100%) -->
+<!-- ========================================== -->
 <script>
-// ==========================================
-// 🛠️ โซนระบบรับเคลมสินค้า (ตัวสมบูรณ์รวมร่าง: เปิดตู้ + บันทึก + ปริ้นท์)
-// ==========================================
-
-// 1. ฟังก์ชันเปิดหน้าต่างฟอร์มรับเคลม (ตัวที่ทำให้ปุ่มเมนูกดแล้วเด้งขึ้นมา)
-function openClaimModal() {
-  const modal = document.getElementById('claim-modal');
-  if(modal) {
-    modal.style.display = 'flex';
-    document.querySelectorAll('#claim-modal input, #claim-modal textarea').forEach(el => el.value = '');
-  } else {
-    alert('ไม่พบหน้าต่างฟอร์มเคลม (claim-modal)');
-  }
-}
-
-function closeClaimModal() { 
-  const modal = document.getElementById('claim-modal');
-  if(modal) modal.style.display = 'none'; 
-}
-
-// 2. ฟังก์ชันกดปุ่มบันทึกและส่งข้อมูล
-function processClaim() {
-  const cust = document.getElementById('cl-cust').value.trim();
-  const phone = document.getElementById('cl-phone').value.trim();
-  const item = document.getElementById('cl-item').value.trim();
-  const symptom = document.getElementById('cl-symptom').value.trim();
-  
-  if(!cust || !phone || !item || !symptom) {
-    if (typeof showToast === 'function') showToast('❌ กรุณากรอกชื่อ, เบอร์, สินค้า และ อาการเสียให้ครบครับ', 'error');
-    else alert('กรุณากรอกข้อมูลที่มีเครื่องหมาย (*) ให้ครบถ้วนครับ'); 
-    return;
-  }
-
-  if (typeof showToast === 'function') showToast('⏳ กำลังบันทึกข้อมูลและสร้างใบเคลม...', 'info');
-
-  const claimId = 'CLM' + Date.now().toString().substring(5);
-  const claimData = {
-    action: "saveClaim",
-    id: claimId, 
-    date: new Date().toISOString(),
-    cust: cust, 
-    phone: phone, 
-    item: item, 
-    symptom: symptom,
-    sn: document.getElementById('cl-sn').value.trim(),
-    buyDate: document.getElementById('cl-date').value,
-    address: document.getElementById('cl-address').value.trim(),
-    acc: document.getElementById('cl-accessories').value.trim(),
-    distry: document.getElementById('cl-distry').value.trim(),
-    seller: (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน'
-  };
-
-  // 💾 บันทึกลงเครื่อง (localStorage)
-  let savedClaims = [];
-  try { savedClaims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
-  savedClaims.push(claimData);
-  localStorage.setItem('ovb_claims', JSON.stringify(savedClaims));
-
-  // 🚀 ส่งข้อมูลเข้า Google Sheets แบบเบื้องหลัง
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwkSbAdfS7EHoC3OwC3avtk2L9bKn0Bw7tmOosmRMmlUcqz6wCJ0WiyvtEZfqJfQLTRnA/exec';
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify(claimData)
-  }).catch(err => console.error("Error saving claim to sheet:", err));
-
-  // 🖨️ สั่งพิมพ์ใบรับเคลม A4 ทันที
-  executePrint(claimData);
-}
-
-// 3. ฟังก์ชันวาดหน้ากระดาษ A4 และสั่งพิมพ์
-function executePrint(claimData) {
-    let printDiv = document.getElementById('claim-print-layout');
-    if (printDiv) printDiv.remove();
-    
-    printDiv = document.createElement('div');
-    printDiv.id = 'claim-print-layout';
-    document.body.appendChild(printDiv);
-
-    const d = new Date();
-    const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-
-    printDiv.innerHTML = `
-        <div style="font-family: 'Sarabun', 'Segoe UI', sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff;">
-            <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
-                <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: bold; text-decoration: underline;">ใบรับเคลมสินค้า (Claim Receipt)</h2>
-                <h3 style="margin: 0 0 5px 0; font-size: 18px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</h3>
-                <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate} | รหัสเคลม: ${claimData.id || '-'}</p>
-            </div>
-            
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 15px;">
-                <tr><td style="padding: 10px; border: 1px solid #ccc; width: 30%; background: #f9f9f9; font-weight: bold;">รหัสเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.id || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">ชื่อลูกค้า:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.cust || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">เบอร์ติดต่อ:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.phone || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สินค้าที่ส่งเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.item || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">Serial Number:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.sn || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">อาการเสีย:</td><td style="padding: 10px; border: 1px solid #ccc; color: #d32f2f;">${claimData.symptom || '-'}</td></tr>
-                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สิ่งที่นำมาด้วย:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.acc || '-'}</td></tr>
-            </table>
-            
-            <div style="display: flex; justify-content: space-between; margin-top: 50px; text-align: center;">
-                <div style="width: 45%;">
-                    <p>...........................................................</p>
-                    <p style="margin-top: 5px;">( ${claimData.cust || '.......................................'} )</p>
-                    <p style="margin-top: 5px;">ลูกค้าผู้ส่งเคลม</p>
-                </div>
-                <div style="width: 45%;">
-                    <p>...........................................................</p>
-                    <p style="margin-top: 5px;">( ${claimData.seller || '.......................................'} )</p>
-                    <p style="margin-top: 5px;">พนักงานผู้รับเรื่อง</p>
-                </div>
+// 1. สร้างหน้าต่าง Modal รอไว้เบื้องหลัง (โดยไม่กวน HTML เดิม)
+if (!document.getElementById('deposit-modal')) {
+    const modalDiv = document.createElement('div');
+    modalDiv.innerHTML = `
+        <div id="deposit-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 99999; align-items: center; justify-content: center;">
+            <div style="background: #1a1a1a; padding: 20px; border-radius: 10px; width: 90%; max-width: 350px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #444;">
+                <h3 style="color: #eab308; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px;">💰 รับเงินมัดจำ</h3>
+                <input type="text" id="dep-cust" placeholder="ชื่อลูกค้า" style="width: 100%; padding: 10px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <input type="number" id="dep-amount" placeholder="ยอดมัดจำ (บาท)" style="width: 100%; padding: 10px; margin: 0 0 15px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <button onclick="processDeposit()" style="width: 100%; padding: 10px; background: #eab308; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px;">💾 บันทึกมัดจำ</button>
+                <button onclick="document.getElementById('deposit-modal').style.display='none'" style="width: 100%; padding: 10px; background: #444; border: none; color: #fff; margin-top: 10px; cursor: pointer; border-radius: 4px;">ยกเลิก</button>
             </div>
         </div>
     `;
+    document.body.appendChild(modalDiv);
+}
 
-    let printStyle = document.getElementById('claim-print-style');
-    if (!printStyle) {
-        printStyle = document.createElement('style');
-        printStyle.id = 'claim-print-style';
-        printStyle.innerHTML = `
-            @media print {
-                body * { visibility: hidden !important; }
-                #claim-print-layout, #claim-print-layout * { visibility: visible !important; color: #000 !important; }
-                #claim-print-layout { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
-                .modal-overlay, #claim-modal { display: none !important; }
-            }
-            @media screen {
-                #claim-print-layout { display: none; }
-            }
-        `;
-        document.head.appendChild(printStyle);
+// 2. ฟังก์ชันเสกปุ่มเข้าไปในหน้าตะกร้า (ทำงานเงียบๆ เบื้องหลัง)
+setInterval(() => {
+    const quoteBtn = document.getElementById('btn-checkout'); // หาปุ่มใบเสนอราคาของคุณโต้ง
+    
+    // ถ้าเจอหน้าตะกร้า และยังไม่มีปุ่มมัดจำ
+    if (quoteBtn && !document.getElementById('btn-open-deposit')) {
+        const depBtn = document.createElement('button');
+        depBtn.id = 'btn-open-deposit';
+        depBtn.innerHTML = '💰 รับมัดจำสินค้า';
+        depBtn.style.cssText = 'width: 100%; padding: 10px; margin-top: 10px; background: #eab308; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 15px; box-sizing: border-box;';
+        depBtn.onclick = () => { document.getElementById('deposit-modal').style.display = 'flex'; };
+        
+        // แอบเอาปุ่มไปวางต่อท้ายให้อัตโนมัติ!
+        quoteBtn.parentNode.insertBefore(depBtn, quoteBtn.nextSibling);
     }
+}, 1000);
 
-    setTimeout(() => {
-        window.print();
-        
-        const inputs = ['cl-cust', 'cl-phone', 'cl-item', 'cl-sn', 'cl-symptom', 'cl-address', 'cl-accessories', 'cl-distry'];
-        inputs.forEach(id => {
-            if(document.getElementById(id)) document.getElementById(id).value = '';
-        });
-        
-        closeClaimModal();
-    }, 500);
+// 3. ฟังก์ชันส่งข้อมูลเข้า Google Sheet
+function processDeposit() {
+    const cust = document.getElementById('dep-cust').value;
+    const amt = document.getElementById('dep-amount').value;
+    if(!cust || !amt) { alert('กรุณากรอกชื่อและยอดมัดจำให้ครบถ้วนครับ'); return; }
+    
+    // ระบบจะดึง SCRIPT_URL ที่คุณโต้งมีอยู่แล้วมาใช้เองอัตโนมัติ
+    const url = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : (typeof scriptUrl !== 'undefined' ? scriptUrl : ''); 
+    if(!url) { alert('ไม่พบการเชื่อมต่อ SCRIPT_URL'); return; }
+
+    document.getElementById('deposit-modal').style.display='none'; // ปิดหน้าต่างรอ
+    
+    fetch(url, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'saveDeposit', data: { cust: cust, deposit: amt } })
+    }).then(() => { 
+        alert('✅ บันทึกมัดจำเรียบร้อยแล้ว!'); 
+        location.reload(); 
+    }).catch(err => {
+        alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
+    });
 }
 </script>
 </body>
