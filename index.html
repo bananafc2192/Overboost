@@ -2856,8 +2856,26 @@ function processQuote() {
 // --- จบโซนระบบใบเสนอราคา ---
 <script>
 // ==========================================
-// 🛠️ โซนระบบรับเคลมสินค้า (ตัวสมบูรณ์รวมร่าง)
+// 🛠️ โซนระบบรับเคลมสินค้า (ตัวสมบูรณ์รวมร่าง: เปิดตู้ + บันทึก + ปริ้นท์)
 // ==========================================
+
+// 1. ฟังก์ชันเปิดหน้าต่างฟอร์มรับเคลม (ตัวที่ทำให้ปุ่มเมนูกดแล้วเด้งขึ้นมา)
+function openClaimModal() {
+  const modal = document.getElementById('claim-modal');
+  if(modal) {
+    modal.style.display = 'flex';
+    document.querySelectorAll('#claim-modal input, #claim-modal textarea').forEach(el => el.value = '');
+  } else {
+    alert('ไม่พบหน้าต่างฟอร์มเคลม (claim-modal)');
+  }
+}
+
+function closeClaimModal() { 
+  const modal = document.getElementById('claim-modal');
+  if(modal) modal.style.display = 'none'; 
+}
+
+// 2. ฟังก์ชันกดปุ่มบันทึกและส่งข้อมูล
 function processClaim() {
   const cust = document.getElementById('cl-cust').value.trim();
   const phone = document.getElementById('cl-phone').value.trim();
@@ -2889,24 +2907,24 @@ function processClaim() {
     seller: (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน'
   };
 
-  // 💾 1. บันทึกลงเครื่อง (localStorage)
+  // 💾 บันทึกลงเครื่อง (localStorage)
   let savedClaims = [];
   try { savedClaims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
   savedClaims.push(claimData);
   localStorage.setItem('ovb_claims', JSON.stringify(savedClaims));
 
-  // 🚀 2. ส่งข้อมูลเข้า Google Sheets แบบเบื้องหลัง
+  // 🚀 ส่งข้อมูลเข้า Google Sheets แบบเบื้องหลัง
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwkSbAdfS7EHoC3OwC3avtk2L9bKn0Bw7tmOosmRMmlUcqz6wCJ0WiyvtEZfqJfQLTRnA/exec';
   fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify(claimData)
   }).catch(err => console.error("Error saving claim to sheet:", err));
 
-  // 🖨️ 3. สั่งพิมพ์ใบรับเคลม A4 ทันที
+  // 🖨️ สั่งพิมพ์ใบรับเคลม A4 ทันที
   executePrint(claimData);
 }
 
-// ฟังก์ชันวาดหน้ากระดาษ A4 และสั่งพิมพ์
+// 3. ฟังก์ชันวาดหน้ากระดาษ A4 และสั่งพิมพ์
 function executePrint(claimData) {
     let printDiv = document.getElementById('claim-print-layout');
     if (printDiv) printDiv.remove();
