@@ -566,7 +566,8 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <div class="nav-tab" onclick="showPage('cart')">ตะกร้า</div>
         <div class="nav-tab" onclick="showPage('history')">🔍 ค้นหาประวัติ</div>
         <div class="nav-tab admin-only" id="tab-report" onclick="showPage('report')">รายงาน Admin</div>
-        <div class="nav-tab" onclick="openClaimModal()">🛠️ รับเคลม</div>
+       <div class="nav-tab" onclick="openClaimModal()">🛠️ รับเคลม</div>
+<div class="nav-tab" onclick="openReprintSearch()" style="background:#2563eb; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left: 5px;">🔍 ค้นหาบิลเคลม</div>
        <div class="nav-tab" onclick="openQuoteModal()">📝 ใบเสนอราคา</div>
       </div>
     </div>
@@ -2539,7 +2540,85 @@ function processClaim() {
   setPrintText('.p-cl-seller-sign', claimData.seller);
 
   closeClaimModal();
-  executePrint('print-claim-page');
+// 🖨️ สร้างหน้ากระดาษ A4 พิมพ์สดๆ และสั่ง window.print() ทันทีตรงนี้เลย
+    let printDiv = document.getElementById('claim-print-layout');
+    if (printDiv) printDiv.remove();
+    
+    printDiv = document.createElement('div');
+    printDiv.id = 'claim-print-layout';
+    document.body.appendChild(printDiv);
+
+    const d = new Date();
+    const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+   printDiv.innerHTML = `
+        <div style="font-family: 'Sarabun', 'Segoe UI', sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff;">
+            
+            <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
+                <!-- โลโก้ 3 ร้านอยู่บนสุด -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 10px;">
+                    <img src="logo.png" style="height: 45px;" alt="Overboost" onerror="this.style.display='none'">
+                    <img src="logo2.png" style="height: 45px;" alt="Alpha Photo" onerror="this.style.display='none'">
+                    <img src="logo3.jpg" style="height: 55px; border-radius: 6px;" alt="Banana Partner" onerror="this.style.display='none'">
+                </div>
+
+                <!-- หัวข้อใบรับเคลมและข้อมูล อยู่ถัดลงมา -->
+                <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: bold; text-decoration: underline;">ใบรับเคลมสินค้า (Claim Receipt)</h2>
+                <h3 style="margin: 0 0 5px 0; font-size: 18px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</h3>
+                <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate} | รหัสเคลม: ${claimId}</p>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 15px;">
+                <tr><td style="padding: 10px; border: 1px solid #ccc; width: 30%; background: #f9f9f9; font-weight: bold;">รหัสเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimId}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">ชื่อลูกค้า:</td><td style="padding: 10px; border: 1px solid #ccc;">${cust}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">เบอร์ติดต่อ:</td><td style="padding: 10px; border: 1px solid #ccc;">${phone}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สินค้าที่ส่งเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${item}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">Serial Number:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.sn || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">อาการเสีย:</td><td style="padding: 10px; border: 1px solid #ccc; color: #d32f2f;">${symptom}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สิ่งที่นำมาด้วย:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.acc || '-'}</td></tr>
+            </table>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 50px; text-align: center;">
+                <div style="width: 45%;">
+                    <p>...........................................................</p>
+                    <p style="margin-top: 5px;">( ${cust} )</p>
+                    <p style="margin-top: 5px;">ลูกค้าผู้ส่งเคลม</p>
+                </div>
+                <div style="width: 45%;">
+                    <p>...........................................................</p>
+                    <p style="margin-top: 5px;">( ${claimData.seller || 'พนักงาน'} )</p>
+                    <p style="margin-top: 5px;">พนักงานผู้รับเรื่อง</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let printStyle = document.getElementById('claim-print-style');
+    if (!printStyle) {
+        printStyle = document.createElement('style');
+        printStyle.id = 'claim-print-style';
+        printStyle.innerHTML = `
+            @media print {
+                body * { visibility: hidden !important; }
+                #claim-print-layout, #claim-print-layout * { visibility: visible !important; color: #000 !important; }
+                #claim-print-layout { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
+                .modal-overlay, #claim-modal { display: none !important; }
+            }
+            @media screen {
+                #claim-print-layout { display: none; }
+            }
+        `;
+        document.head.appendChild(printStyle);
+    }
+
+    setTimeout(() => {
+        window.print();
+        
+        // ล้างช่องกรอกข้อมูล
+        ['cl-cust', 'cl-phone', 'cl-item', 'cl-sn', 'cl-symptom', 'cl-address', 'cl-accessories', 'cl-distry'].forEach(id => {
+            if(document.getElementById(id)) document.getElementById(id).value = '';
+        });
+    }, 400);
 }
 
 function openClaimHistory() {
@@ -2554,10 +2633,10 @@ function renderClaimHistory(keyword) {
   let claims = [];
   try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
   if(claims.length === 0) { listEl.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">ไม่มีประวัติการรับเคลมในระบบ</div>'; return; }
-  claims.sort((a,b) => new Date(b.date) - new Date(a.date));
+  claims.sort((a,b) => new Date(b.date) - new Date(b.date));
   if(keyword) {
     const kw = keyword.toLowerCase();
-    claims = claims.filter(c => (c.cust||'').toLowerCase().includes(kw) || (c.phone||'').includes(kw) || (c.item||'').toLowerCase().includes(kw) || (c.sn||'').toLowerCase().includes(kw));
+    claims = claims.filter(c => (c.cust||'').toLowerCase().includes(kw) || (c.phone||'').includes(kw) || (c.item||'').toLowerCase().includes(kw) || (c.sn||'').toLowerCase().includes(kw) || (c.id||'').toLowerCase().includes(kw));
   }
   listEl.innerHTML = claims.map(c => {
     const d = new Date(c.date);
@@ -2567,12 +2646,17 @@ function renderClaimHistory(keyword) {
                    diffDays > 7 ? `<span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;">ผ่านมา ${diffDays} วัน</span>` : 
                    `<span style="background:var(--amber);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;">ผ่านมา ${diffDays} วัน</span>`;
     return `
-    <div style="background:#121212; border:1px solid #333; padding:15px; border-radius:8px; display:flex; justify-content:space-between; align-items:flex-start;">
+    <div style="background:#121212; border:1px solid #333; padding:15px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:5px;"><h4 style="margin:0; color:#fff; font-size:15px;">👤 ${c.cust}</h4><span style="font-size:12px; color:#aaa;">📞 ${c.phone}</span>${dayBadge}</div>
         <div style="font-size:13px; color:#ddd; margin-bottom:4px;"><b>📦 สินค้า:</b> ${c.item} <span style="color:#aaa;">(S/N: ${c.sn||'-'})</span></div>
         <div style="font-size:13px; color:#ff6b6b; margin-bottom:4px;"><b>⚠️ อาการ:</b> ${c.symptom}</div>
         <div style="font-size:12px; color:#888;">📅 รับเรื่อง: ${dateStr} | รหัส: ${c.id} | 👨‍💼 โดย: ${c.seller}</div>
+      </div>
+      <div>
+        <button onclick="reprintClaim('${c.id}')" style="background:#3b82f6; color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px; white-space:nowrap;">
+            🖨️ พิมพ์ใบเคลม
+        </button>
       </div>
     </div>`;
   }).join('');
@@ -2915,6 +2999,127 @@ function processDeposit() {
     }).catch(err => {
         alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
     });
+}
+</script>
+<script>
+// ==========================================
+// 🖨️ ฟังก์ชันค้นหาและพิมพ์ใบเคลมซ้ำ (Reprint)
+// ==========================================
+function reprintClaim(claimId) {
+    let savedClaims = [];
+    try { savedClaims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
+    
+    // ค้นหาข้อมูลเคลมจากรหัส (claimId) ที่ส่งมา
+    const claimData = savedClaims.find(item => item.id === claimId);
+    if (!claimData) {
+        alert('ไม่พบข้อมูลประวัติเคลมรหัส: ' + claimId);
+        return;
+    }
+
+    // สร้างหน้ากระดาษ A4 สำหรับพิมพ์ซ้ำ
+    let printDiv = document.getElementById('claim-print-layout');
+    if (printDiv) printDiv.remove();
+    
+    printDiv = document.createElement('div');
+    printDiv.id = 'claim-print-layout';
+    document.body.appendChild(printDiv);
+
+    const d = new Date(claimData.date || Date.now());
+    const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+    printDiv.innerHTML = `
+        <div style="font-family: 'Sarabun', 'Segoe UI', sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff;">
+            
+            <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
+                <div style="display: flex; justify-content: center; align-items: center; gap: 30px; margin-bottom: 10px;">
+                    <img src="logo.png" style="height: 45px;" alt="Overboost" onerror="this.style.display='none'">
+                    <img src="logo2.png" style="height: 45px;" alt="Alpha Photo" onerror="this.style.display='none'">
+                    <img src="logo3.jpg" style="height: 55px; border-radius: 6px;" alt="Banana Partner" onerror="this.style.display='none'">
+                </div>
+
+                <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: bold; text-decoration: underline;">ใบรับเคลมสินค้า (Claim Receipt - Reprint)</h2>
+                <h3 style="margin: 0 0 5px 0; font-size: 18px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</h3>
+                <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate} | รหัสเคลม: ${claimData.id || '-'}</p>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 15px;">
+                <tr><td style="padding: 10px; border: 1px solid #ccc; width: 30%; background: #f9f9f9; font-weight: bold;">รหัสเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.id || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">ชื่อลูกค้า:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.cust || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; width: 30%; background: #f9f9f9; font-weight: bold;">เบอร์ติดต่อ:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.phone || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สินค้าที่ส่งเคลม:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.item || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">Serial Number:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.sn || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">อาการเสีย:</td><td style="padding: 10px; border: 1px solid #ccc; color: #d32f2f;">${claimData.symptom || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สิ่งที่นำมาด้วย:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.acc || '-'}</td></tr>
+            </table>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 50px; text-align: center;">
+                <div style="width: 45%;">
+                    <p>...........................................................</p>
+                    <p style="margin-top: 5px;">( ${claimData.cust || '.......................................'} )</p>
+                    <p style="margin-top: 5px;">ลูกค้าผู้ส่งเคลม</p>
+                </div>
+                <div style="width: 45%;">
+                    <p>...........................................................</p>
+                    <p style="margin-top: 5px;">( ${claimData.seller || 'พนักงาน'} )</p>
+                    <p style="margin-top: 5px;">พนักงานผู้รับเรื่อง</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    let printStyle = document.getElementById('claim-print-style');
+    if (!printStyle) {
+        printStyle = document.createElement('style');
+        printStyle.id = 'claim-print-style';
+        printStyle.innerHTML = `
+            @media print {
+                body * { visibility: hidden !important; }
+                #claim-print-layout, #claim-print-layout * { visibility: visible !important; color: #000 !important; }
+                #claim-print-layout { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: #fff; }
+                .modal-overlay, #claim-modal { display: none !important; }
+            }
+            @media screen {
+                #claim-print-layout { display: none; }
+            }
+        `;
+        document.head.appendChild(printStyle);
+    }
+
+    setTimeout(() => {
+        window.print();
+    }, 400);
+}
+</script>
+<script>
+function openReprintSearch() {
+    let keyword = prompt("พิมพ์ชื่อลูกค้า, เบอร์โทร, หรือรหัสเคลม (เช่น CLM...):");
+    if (!keyword) return;
+    
+    let savedClaims = [];
+    try { savedClaims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
+    
+    const kw = keyword.toLowerCase().trim();
+    const found = savedClaims.filter(c => 
+        (c.id && c.id.toLowerCase().includes(kw)) ||
+        (c.cust && c.cust.toLowerCase().includes(kw)) ||
+        (c.phone && c.phone.includes(kw)) ||
+        (c.item && c.item.toLowerCase().includes(kw))
+    );
+
+    if (found.length === 0) {
+        alert("❌ ไม่พบข้อมูลบิลเคลมที่ค้นหาครับ");
+        return;
+    }
+
+    if (found.length === 1) {
+        executePrint(found[0]);
+    } else {
+        let listText = "พบประวัติมากกว่า 1 รายการ กรุณาระบุรหัสเคลมให้ชัดเจน:\n\n";
+        found.forEach(c => {
+            listText += `รหัส: ${c.id} | ชื่อ: ${c.cust} | สินค้า: ${c.item}\n`;
+        });
+        alert(listText);
+    }
 }
 </script>
 </body>
