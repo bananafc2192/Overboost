@@ -2854,17 +2854,60 @@ function processQuote() {
     }, 500);
 }
 // --- จบโซนระบบใบเสนอราคา ---
-<!-- ... existing code ... -->
-</script>
-<!-- ========================================== -->
-<!-- 🛠️ สมองสั่งการ: ฟังก์ชันชุบชีวิตระบบพิมพ์ใบเคลม -->
-<!-- ========================================== -->
 <script>
 // ==========================================
-// 🖨️ ฟังก์ชันชุบชีวิตระบบพิมพ์ใบเคลม (ปลอดภัย ไม่ชนของเดิม)
+// 🛠️ โซนระบบรับเคลมสินค้า (ตัวสมบูรณ์รวมร่าง)
 // ==========================================
+function processClaim() {
+  const cust = document.getElementById('cl-cust').value.trim();
+  const phone = document.getElementById('cl-phone').value.trim();
+  const item = document.getElementById('cl-item').value.trim();
+  const symptom = document.getElementById('cl-symptom').value.trim();
+  
+  if(!cust || !phone || !item || !symptom) {
+    if (typeof showToast === 'function') showToast('❌ กรุณากรอกชื่อ, เบอร์, สินค้า และ อาการเสียให้ครบครับ', 'error');
+    else alert('กรุณากรอกข้อมูลที่มีเครื่องหมาย (*) ให้ครบถ้วนครับ'); 
+    return;
+  }
+
+  if (typeof showToast === 'function') showToast('⏳ กำลังบันทึกข้อมูลและสร้างใบเคลม...', 'info');
+
+  const claimId = 'CLM' + Date.now().toString().substring(5);
+  const claimData = {
+    action: "saveClaim",
+    id: claimId, 
+    date: new Date().toISOString(),
+    cust: cust, 
+    phone: phone, 
+    item: item, 
+    symptom: symptom,
+    sn: document.getElementById('cl-sn').value.trim(),
+    buyDate: document.getElementById('cl-date').value,
+    address: document.getElementById('cl-address').value.trim(),
+    acc: document.getElementById('cl-accessories').value.trim(),
+    distry: document.getElementById('cl-distry').value.trim(),
+    seller: (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน'
+  };
+
+  // 💾 1. บันทึกลงเครื่อง (localStorage)
+  let savedClaims = [];
+  try { savedClaims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
+  savedClaims.push(claimData);
+  localStorage.setItem('ovb_claims', JSON.stringify(savedClaims));
+
+  // 🚀 2. ส่งข้อมูลเข้า Google Sheets แบบเบื้องหลัง
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwkSbAdfS7EHoC3OwC3avtk2L9bKn0Bw7tmOosmRMmlUcqz6wCJ0WiyvtEZfqJfQLTRnA/exec';
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(claimData)
+  }).catch(err => console.error("Error saving claim to sheet:", err));
+
+  // 🖨️ 3. สั่งพิมพ์ใบรับเคลม A4 ทันที
+  executePrint(claimData);
+}
+
+// ฟังก์ชันวาดหน้ากระดาษ A4 และสั่งพิมพ์
 function executePrint(claimData) {
-    // 1. สร้างพื้นที่จำลองสำหรับพิมพ์
     let printDiv = document.getElementById('claim-print-layout');
     if (printDiv) printDiv.remove();
     
@@ -2875,14 +2918,12 @@ function executePrint(claimData) {
     const d = new Date();
     const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
 
-    // 2. โครงสร้าง A4 ใบรับเคลม
     printDiv.innerHTML = `
         <div style="font-family: 'Sarabun', 'Segoe UI', sans-serif; color: #000; width: 100%; max-width: 800px; margin: 0 auto; padding: 20px; background: #fff;">
-            
             <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 15px;">
                 <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: bold; text-decoration: underline;">ใบรับเคลมสินค้า (Claim Receipt)</h2>
                 <h3 style="margin: 0 0 5px 0; font-size: 18px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</h3>
-                <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate}</p>
+                <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate} | รหัสเคลม: ${claimData.id || '-'}</p>
             </div>
             
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 15px;">
@@ -2910,7 +2951,6 @@ function executePrint(claimData) {
         </div>
     `;
 
-    // 3. กำหนด CSS บังคับให้แสดงแค่หน้า A4 ตอนสั่งปริ้นท์
     let printStyle = document.getElementById('claim-print-style');
     if (!printStyle) {
         printStyle = document.createElement('style');
@@ -2929,18 +2969,15 @@ function executePrint(claimData) {
         document.head.appendChild(printStyle);
     }
 
-    // 4. สั่งพิมพ์ และล้างข้อมูลหลังพิมพ์เสร็จ
     setTimeout(() => {
         window.print();
         
-        // ล้างช่องกรอกเพื่อเคลมครั้งต่อไป
         const inputs = ['cl-cust', 'cl-phone', 'cl-item', 'cl-sn', 'cl-symptom', 'cl-address', 'cl-accessories', 'cl-distry'];
         inputs.forEach(id => {
             if(document.getElementById(id)) document.getElementById(id).value = '';
         });
         
-        if (typeof closeClaimModal === 'function') { closeClaimModal(); } 
-        else if(document.getElementById('claim-modal')) { document.getElementById('claim-modal').style.display = 'none'; }
+        closeClaimModal();
     }, 500);
 }
 </script>
