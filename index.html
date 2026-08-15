@@ -2729,7 +2729,8 @@ function processRepair(printType) {
     savedRepairs.push(repairData);
     localStorage.setItem('ovb_repairs', JSON.stringify(savedRepairs));
 
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby9hs6etxMBHmJNIxf7KMEpTGFoS1wx6bple9Y3mavXCiib1jZ1ZEfgyNFVpg5mzr4AEA/exec';
+    // 🚀 ส่งข้อมูลเข้า Google Sheets (ใส่เครื่องหมาย ' ครบถ้วนถูกต้องแล้ว)
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyPrr3Izp7xAfJk4C9JVKm2AlA2L0FX047-6ZRTquYw2NGygik_7Rgsq5qsVKdfk1Q3A/exec';
     fetch(SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify(repairData)
