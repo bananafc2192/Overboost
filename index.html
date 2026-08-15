@@ -633,7 +633,8 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <div class="quote-brand" style="font-size:14px;font-weight:600;color:var(--text)">บริษัท โอเวอร์บูสท์คอมพิวเตอร์ จำกัด</div>
         <div class="quote-sub" style="font-size:11px;color:var(--text2);line-height:1.7;margin-top:2px">
           191/7 หมู่17 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000<br>
-          โทร. 083-4517780 / 095-4174740<br>
+          <b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622<br>
+          <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526<br>
           Email: overboostkk191@gmail.com
         </div>
         <div class="quote-meta">
@@ -2567,8 +2568,8 @@ function processClaim() {
                 <b style="font-size: 14px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</b><br>
                 
                 <div style="font-size: 11.5px; margin-top: 4px; line-height: 1.5;">
-                    <b>สนญ. (Bnn เทคโนภาคฯ):</b> 065-6625622<br>
-                    <b>สาขาตึกคอม:</b> 098-2035760, 084-5535526
+                    <b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622<br>
+                    <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526
                 </div>
                 
                 <div style="margin-top: 6px; font-size: 11px; border-bottom: 1px dashed #000; padding-bottom: 6px;">
@@ -2595,12 +2596,24 @@ function processClaim() {
                     <div style="width: 65%; word-break: break-word;">${claimData.sn || '-'}</div>
                 </div>
                 <div style="display: flex; margin-bottom: 4px;">
+                    <div style="width: 35%; font-weight: bold;">วันที่ซื้อ:</div>
+                    <div style="width: 65%; word-break: break-word;">${datePrint}</div>
+                </div>
+                <div style="display: flex; margin-bottom: 4px;">
                     <div style="width: 35%; font-weight: bold;">อาการเสีย:</div>
                     <div style="width: 65%; word-break: break-word;">${symptom}</div>
                 </div>
                 <div style="display: flex; margin-bottom: 4px;">
                     <div style="width: 35%; font-weight: bold;">สิ่งที่นำมา:</div>
                     <div style="width: 65%; word-break: break-word;">${claimData.acc || '-'}</div>
+                </div>
+                <div style="display: flex; margin-bottom: 4px;">
+                    <div style="width: 35%; font-weight: bold;">ที่อยู่ส่งกลับ:</div>
+                    <div style="width: 65%; word-break: break-word;">${claimData.address || '-'}</div>
+                </div>
+                <div style="display: flex; margin-bottom: 4px;">
+                    <div style="width: 35%; font-weight: bold;">Remark (Distry):</div>
+                    <div style="width: 65%; word-break: break-word;">${claimData.distry || '-'}</div>
                 </div>
             </div>
 
@@ -3066,6 +3079,10 @@ function reprintClaim(claimId) {
 
                 <h2 style="margin: 0 0 10px 0; font-size: 24px; font-weight: bold; text-decoration: underline;">ใบรับเคลมสินค้า (Claim Receipt - Reprint)</h2>
                 <h3 style="margin: 0 0 5px 0; font-size: 18px;">บจก.โอเวอร์บูสท์คอมพิวเตอร์</h3>
+                <p style="margin: 0 0 6px 0; font-size: 13px;">
+                    <b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622 &nbsp;/&nbsp;
+                    <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526
+                </p>
                 <p style="margin: 0; font-size: 14px;">วันที่รับเรื่อง: ${printDate} | รหัสเคลม: ${claimData.id || '-'}</p>
             </div>
             
@@ -3077,6 +3094,8 @@ function reprintClaim(claimId) {
                 <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">Serial Number:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.sn || '-'}</td></tr>
                 <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">อาการเสีย:</td><td style="padding: 10px; border: 1px solid #ccc; color: #d32f2f;">${claimData.symptom || '-'}</td></tr>
                 <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">สิ่งที่นำมาด้วย:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.acc || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">ที่อยู่ส่งกลับ:</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.address || '-'}</td></tr>
+                <tr><td style="padding: 10px; border: 1px solid #ccc; background: #f9f9f9; font-weight: bold;">Remark (Distry):</td><td style="padding: 10px; border: 1px solid #ccc;">${claimData.distry || '-'}</td></tr>
             </table>
             
             <div style="display: flex; justify-content: space-between; margin-top: 50px; text-align: center;">
