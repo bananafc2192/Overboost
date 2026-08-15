@@ -2663,7 +2663,7 @@ function renderClaimHistory(keyword) {
   }).join('');
 }
 // ==========================================
-// 🛠️ ระบบรับซ่อมสินค้า (Repair System - ต่อท้ายแบบจบในตัว)
+// 🛠️ ระบบรับซ่อมสินค้า (Repair System - ครบถ้วนพร้อมลิงก์ใหม่)
 // ==========================================
 function openRepairModal() {
     const modal = document.getElementById('repair-modal');
@@ -2729,8 +2729,8 @@ function processRepair(printType) {
     savedRepairs.push(repairData);
     localStorage.setItem('ovb_repairs', JSON.stringify(savedRepairs));
 
-    // 🚀 ส่งข้อมูลเข้า Google Sheets (ใส่เครื่องหมาย ' ครบถ้วนถูกต้องแล้ว)
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyPrr3Izp7xAfJk4C9JVKm2AlA2L0FX047-6ZRTquYw2NGygik_7Rgsq5qsVKdfk1Q3A/exec';
+    // 🚀 ส่งข้อมูลเข้า Google Sheets (อัปเดตลิงก์ใหม่ของคุณโต้งเรียบร้อยแล้ว)
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
     fetch(SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify(repairData)
