@@ -705,9 +705,8 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
             <button class="print-mode-btn active" id="btn-a4" onclick="setPrintMode('a4')">📄 A4</button>
             <button class="print-mode-btn" id="btn-slip" onclick="setPrintMode('slip')">🧾 Slip 80mm</button>
           </div>
-          <button class="btn-print" style="width:100%" onclick="doPrint()">🖨️ พิมพ์ / บันทึก PDF</button>
+          <button class="btn-confirm-sale" id="btn-sale-action" style="width:100%" onclick="confirmSale()">🖨️ พิมพ์ &amp; บันทึกการขาย</button>
         </div>
-        <button class="btn-confirm-sale" onclick="confirmSale()">✅ ยืนยันการขาย</button>
       </div>
     </div>
   </div>
@@ -851,6 +850,7 @@ let currentProd = null;
 const fmt = n => n > 0 ? '฿' + n.toLocaleString('th-TH', {minimumFractionDigits:0,maximumFractionDigits:0}) : '-';
 
 const API_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
+const SCRIPT_URL = API_URL; // endpoint เดียวกัน ใช้ตัวแปรกลางตัวเดียว ป้องกันปัญหา URL ไม่ตรงกัน/มองไม่เห็นข้ามฟังก์ชัน
 
 async function doLogin() {
   const u = document.getElementById('l-user').value.trim().toLowerCase();
@@ -1454,8 +1454,24 @@ function removeItem(idx) {
   renderCart(); updateCartBadge(); 
 }
 
+let isReprintMode = false;
+function updateQuoteActionButton() {
+  const btn = document.getElementById('btn-sale-action');
+  if (!btn) return;
+  if (isReprintMode) {
+    btn.textContent = '🖨️ พิมพ์ใบเสร็จซ้ำ';
+    btn.onclick = doPrint;
+    btn.style.background = 'var(--border)';
+  } else {
+    btn.textContent = '🖨️ พิมพ์ & บันทึกการขาย';
+    btn.onclick = confirmSale;
+    btn.style.background = 'var(--green)';
+  }
+}
+
 function goToQuote() {
   if (cart.length === 0) return;
+  isReprintMode = false;
   const custName = document.getElementById('cust-name').value || 'ลูกค้าทั่วไป';
   const custPhone = document.getElementById('cust-phone').value || '-';
   const custNote = document.getElementById('cust-note').value || '-';
@@ -1492,6 +1508,7 @@ function goToQuote() {
 
   document.getElementById('quote-body').innerHTML = htmlBody;
   document.getElementById('quote-grand').textContent = fmt(grand);
+  updateQuoteActionButton();
   showPage('quote');
 }
 
@@ -1522,14 +1539,18 @@ async function confirmSale() {
     const saleRes = await fetch(API_URL + '?action=addSale&data=' + saleEncoded);
     const saleResult = await saleRes.json();
     if (!saleResult.ok) throw new Error(saleResult.error || 'Save failed');
-    showToast('✅ บันทึกการขายสำเร็จ!', 'success');
+    showToast('✅ บันทึกการขายสำเร็จ กำลังพิมพ์...', 'success');
   } catch(e) {
     // Fallback to localStorage
     const sales = getSales();
     sales.push(sale);
     localStorage.setItem('ovb_sales', JSON.stringify(sales));
-    showToast('✅ บันทึกแบบ offline สำเร็จ', 'success');
+    showToast('✅ บันทึกแบบ offline สำเร็จ กำลังพิมพ์...', 'success');
   }
+
+  // 🖨️ พิมพ์ทันทีหลังบันทึกสำเร็จ (รวมสองปุ่มเป็นปุ่มเดียว ไม่ต้องกดซ้ำซ้อน)
+  doPrint();
+
   cart = [];
   updateCartBadge();
   if (typeof resetDiscount === 'function') resetDiscount();
@@ -1537,7 +1558,7 @@ async function confirmSale() {
   document.getElementById('cust-name').value = '';
   document.getElementById('cust-phone').value = '';
   document.getElementById('cust-note').value = '';
-  btn.textContent = '✅ ยืนยันการขาย';
+  btn.textContent = '🖨️ พิมพ์ & บันทึกการขาย';
  btn.disabled = false;
   setTimeout(() => {
     showPage('products');
@@ -1646,12 +1667,13 @@ async function renderReport() {
     return nameMatch || itemMatch || phoneMatch;
   });
 
-  const totalRevenue = filteredSales.reduce((sum, x) => sum + (Number(x.total) || 0), 0);
-  const totalItems = filteredSales.reduce((sum, x) => {
+  const activeSales = filteredSales.filter(s => s.status !== 'ยกเลิก' && s.Status !== 'ยกเลิก');
+  const totalRevenue = activeSales.reduce((sum, x) => sum + (Number(x.total) || 0), 0);
+  const totalItems = activeSales.reduce((sum, x) => {
     if (!Array.isArray(x.items)) return sum;
     return sum + x.items.reduce((a, i) => a + (Number(i.qty) || 0), 0);
   }, 0);
-  const sellers = [...new Set(filteredSales.map(s => s.seller).filter(Boolean))].length;
+  const sellers = [...new Set(activeSales.map(s => s.seller).filter(Boolean))].length;
 
   document.getElementById('stats-grid').innerHTML = `
     <div class="stat-card"><div class="stat-label">ยอดขายรวม</div><div class="stat-val red">${fmt(totalRevenue)}</div></div>
@@ -1676,15 +1698,23 @@ async function renderReport() {
     const itemList = itemsArray.map(i => `${(i.name || '').substring(0,20)} x${i.qty || 0}`).join(', ');
     const qty = itemsArray.reduce((a, i) => a + (Number(i.qty) || 0), 0);
     const total = Number(s.total) || 0;
+    const isCancelled = s.status === 'ยกเลิก' || s.Status === 'ยกเลิก';
+    const rowStyle = isCancelled ? 'opacity:0.5;text-decoration:line-through' : '';
+    const actionCell = isCancelled
+      ? `<span style="padding:4px 10px;background:rgba(255,51,51,0.15);border:1px solid var(--red);border-radius:5px;color:var(--red);font-size:11px;white-space:nowrap">❌ ยกเลิกแล้ว</span>`
+      : `<div style="display:flex;gap:6px">
+           <button onclick="reprintSale('${s.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px">🖨️ พิมพ์</button>
+           <button onclick="cancelSale('${s.id}', '${(s.customer || '-').replace(/'/g, "\\'")}')" style="padding:4px 10px;background:transparent;border:1px solid var(--red);border-radius:5px;color:var(--red);cursor:pointer;font-size:11px">🗑️ ยกเลิกบิล</button>
+         </div>`;
 
-    return `<tr>
+    return `<tr style="${rowStyle}">
       <td style="white-space:nowrap">${t}</td>
       <td><span class="seller-badge">${s.sellerName || s.seller || '-'}</span></td>
       <td>${s.customer || '-'}</td>
       <td style="font-size:12px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${itemList}</td>
       <td>${qty}</td>
       <td style="text-align:right;font-weight:600;color:var(--red)">${fmt(total)}</td>
-      <td><button onclick="reprintSale('${s.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px">🖨️ พิมพ์</button></td>
+      <td>${actionCell}</td>
     </tr>`;
   }).join('');
 }
@@ -1829,6 +1859,7 @@ function initMonthFilter() {
 }
 
 function reprintSale(saleId) {
+  isReprintMode = true;
   // Find sale from report data
   const rows = document.querySelectorAll('#report-body tr');
   let saleData = null;
@@ -1858,8 +1889,28 @@ function reprintSale(saleId) {
     </tr>`).join('');
   document.getElementById('quote-grand').textContent = fmt(grand);
   
+  updateQuoteActionButton();
   showPage('quote');
   showToast('📄 พร้อมพิมพ์ใบเสร็จแล้ว', 'success');
+}
+
+// 🗑️ ยกเลิกบิล (กรณีออกบิลผิด/สินค้าเสียภายใน 7 วัน) - คืนสต็อกสินค้า + ไม่นับยอดขาย
+async function cancelSale(saleId, custName) {
+  if (!confirm(`ยืนยันยกเลิกบิลของ "${custName}" ใช่หรือไม่?\n\nระบบจะคืนสต็อกสินค้าที่ตัดไปแล้ว และไม่นับยอดขายนี้อีกต่อไป (แก้ไขย้อนกลับไม่ได้)`)) return;
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'cancelSale', id: saleId })
+    });
+    const result = await res.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Cancel failed');
+    showToast('✅ ยกเลิกบิลและคืนสต็อกเรียบร้อยแล้ว', 'success');
+  } catch(e) {
+    showToast('❌ ยกเลิกบิลไม่สำเร็จ: ' + e.message, 'error');
+    return;
+  }
+  renderReport();
 }
 
 // PRODUCTS DATA
@@ -2112,6 +2163,8 @@ async function reprintFromHistory(saleId) {
     </tr>` : '';
   document.getElementById('quote-body').innerHTML += discRow;
   document.getElementById('quote-grand').textContent = fmt(saleData.total);
+  isReprintMode = true;
+  updateQuoteActionButton();
   showPage('quote');
   showToast('📄 พร้อมพิมพ์ใบเสร็จแล้ว', 'success');
 }
@@ -2215,6 +2268,17 @@ async function reprintFromHistory(saleId) {
       <button onclick="closeRepairModal()" style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✕</button>
     </div>
 
+    <div id="rp-edit-banner" style="display:none; background:rgba(147,51,234,0.15); border:1px solid #9333ea; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#c084fc;">
+      ✏️ กำลังแก้ไขบิลซ่อมเดิม #<span id="rp-edit-id"></span> — บันทึกจะอัปเดตบิลนี้ (ไม่สร้างบิลใหม่)
+      <button onclick="cancelEditRepair()" style="float:right; background:transparent; border:1px solid #c084fc; color:#c084fc; border-radius:4px; padding:1px 8px; cursor:pointer; font-size:11px;">ยกเลิกแก้ไข</button>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <input type="text" id="rp-find-input" placeholder="🔍 ค้นหาบิลซ่อมเดิม (ชื่อ/เบอร์) เพื่อกลับมาแก้ไข-ปิดงาน" style="flex:1; padding:8px 10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; font-size:12px; box-sizing:border-box;">
+      <button onclick="searchRepairHistory()" style="padding:8px 14px; background:#333; border:1px solid #555; color:#fff; border-radius:6px; cursor:pointer; font-size:12px; white-space:nowrap;">ค้นหา</button>
+    </div>
+    <div id="rp-find-results" style="display:none; max-height:150px; overflow-y:auto; margin-bottom:12px; border:1px solid #333; border-radius:6px;"></div>
+
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
       <input type="text" id="rp-cust" placeholder="ชื่อ-นามสกุล *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
       <input type="text" id="rp-phone" placeholder="เบอร์โทร *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
@@ -2241,7 +2305,7 @@ async function reprintFromHistory(saleId) {
     <style>#rp-mode-slip.active, #rp-mode-a4.active { border-color:#9333ea !important; color:#9333ea !important; }</style>
     <div style="margin-top: 10px; display:flex; gap:10px;">
       <button onclick="closeRepairModal()" style="flex:1; padding:10px; background:transparent; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer;">ยกเลิก</button>
-      <button onclick="processRepair()" style="flex:2; background:#9333ea; color:#fff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 บันทึก & พิมพ์ใบรับซ่อม</button>
+      <button onclick="processRepair()" id="rp-save-btn" style="flex:2; background:#9333ea; color:#fff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 บันทึก & พิมพ์ใบรับซ่อม</button>
     </div>
   </div>
 </div>
@@ -2463,15 +2527,81 @@ function openClaimModal() {
 function closeClaimModal() { document.getElementById('claim-modal').style.display = 'none'; }
 function closeClaimHistory() { document.getElementById('claim-history-modal').style.display = 'none'; }
 
+let editingRepairId = null;
 function openRepairModal() {
   if(!checkAuthBefore('ทำรายการรับซ่อม')) return;
   const modal = document.getElementById('repair-modal');
   if(modal) {
     modal.style.display = 'flex';
     document.querySelectorAll('#repair-modal input, #repair-modal textarea').forEach(el => el.value = '');
+    cancelEditRepair();
   }
 }
 function closeRepairModal() { document.getElementById('repair-modal').style.display = 'none'; }
+
+function cancelEditRepair() {
+  editingRepairId = null;
+  document.getElementById('rp-edit-banner').style.display = 'none';
+  document.getElementById('rp-save-btn').textContent = '💾 บันทึก & พิมพ์ใบรับซ่อม';
+  document.getElementById('rp-find-results').style.display = 'none';
+  document.getElementById('rp-find-input').value = '';
+}
+
+async function searchRepairHistory() {
+  const kw = document.getElementById('rp-find-input').value.trim().toLowerCase();
+  const box = document.getElementById('rp-find-results');
+  if (!kw) { box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  box.innerHTML = '<div style="padding:10px;color:#999;font-size:12px">⏳ กำลังค้นหา...</div>';
+
+  let repairs = [];
+  try {
+    const res = await fetch(API_URL + '?action=getRepairs');
+    const data = await res.json();
+    repairs = data.repairs || [];
+  } catch(e) {
+    try { repairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e2) {}
+  }
+
+  const kwDigits = kw.replace(/[^0-9]/g, '');
+  const matches = repairs.filter(r => {
+    const nameMatch = String(r.cust || '').toLowerCase().includes(kw);
+    const phoneMatch = kwDigits && String(r.phone || '').replace(/[^0-9]/g,'').includes(kwDigits);
+    return nameMatch || phoneMatch;
+  }).reverse().slice(0, 15);
+
+  if (matches.length === 0) {
+    box.innerHTML = '<div style="padding:10px;color:#999;font-size:12px">ไม่พบบิลซ่อมที่ตรงกับคำค้นหา</div>';
+    return;
+  }
+
+  box.innerHTML = matches.map(r => `
+    <div onclick='loadRepairForEdit(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="padding:8px 10px; border-bottom:1px solid #333; cursor:pointer; font-size:12px;" onmouseover="this.style.background='#2a2a2a'" onmouseout="this.style.background='transparent'">
+      <b>${r.cust || '-'}</b> · ${r.phone || '-'} · ${r.item || '-'}<br>
+      <span style="color:#999">รหัส: ${r.id || '-'} · ประเมิน ${r.estimate || '-'} บาท · ${r.date ? new Date(r.date).toLocaleDateString('th-TH') : '-'}</span>
+    </div>
+  `).join('');
+}
+
+function loadRepairForEdit(r) {
+  document.getElementById('rp-cust').value = r.cust || '';
+  document.getElementById('rp-phone').value = r.phone || '';
+  document.getElementById('rp-item').value = r.item || '';
+  document.getElementById('rp-accessories').value = r.acc || '';
+  document.getElementById('rp-symptom').value = r.symptom || '';
+  document.getElementById('rp-estimate').value = r.estimate || '';
+  document.getElementById('rp-paid').value = r.paid || '';
+  document.getElementById('rp-address').value = r.address || '';
+  document.getElementById('rp-remark').value = r.remark || '';
+
+  editingRepairId = r.id;
+  document.getElementById('rp-edit-id').textContent = r.id || '-';
+  document.getElementById('rp-edit-banner').style.display = 'block';
+  document.getElementById('rp-save-btn').textContent = '💾 บันทึกการแก้ไข & พิมพ์ใบซ่อม';
+  document.getElementById('rp-find-results').style.display = 'none';
+  if (typeof showToast === 'function') showToast('📋 โหลดบิลซ่อมเดิมแล้ว แก้ไขแล้วกดบันทึกเพื่ออัปเดต', 'info');
+}
 
 function searchClaimProductModal(kw) {
   const dropdown = document.getElementById('cl-item-dropdown');
@@ -2793,11 +2923,12 @@ function processRepair() {
     else alert('กรุณากรอกข้อมูลที่มีดอกจัน (*) ให้ครบถ้วนครับ'); return;
   }
 
-  if (typeof showToast === 'function') showToast('⏳ กำลังบันทึกข้อมูลและสร้างใบรับซ่อม...', 'info');
+  const isEdit = !!editingRepairId;
+  if (typeof showToast === 'function') showToast(isEdit ? '⏳ กำลังอัปเดตบิลซ่อม...' : '⏳ กำลังบันทึกข้อมูลและสร้างใบรับซ่อม...', 'info');
 
-  const repairId = 'RPR' + Date.now().toString().substring(5);
+  const repairId = isEdit ? editingRepairId : ('RPR' + Date.now().toString().substring(5));
   const repairData = {
-    action: "saveRepair",
+    action: isEdit ? "updateRepair" : "saveRepair",
     id: repairId, date: new Date().toISOString(),
     cust: cust, phone: phone, item: item, symptom: symptom,
     acc: document.getElementById('rp-accessories').value.trim(),
@@ -2811,17 +2942,22 @@ function processRepair() {
   // 💾 บันทึกลงเครื่อง (ประวัติ)
   let savedRepairs = [];
   try { savedRepairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e){}
-  savedRepairs.push(repairData);
+  if (isEdit) {
+    const idx = savedRepairs.findIndex(r => r.id === repairId);
+    if (idx >= 0) savedRepairs[idx] = repairData; else savedRepairs.push(repairData);
+  } else {
+    savedRepairs.push(repairData);
+  }
   localStorage.setItem('ovb_repairs', JSON.stringify(savedRepairs));
 
   // 🚀 ส่งข้อมูลเข้า Google Sheets (ใช้ endpoint เดียวกับใบเคลม)
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
   fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify(repairData)
   }).catch(err => console.error("Error saving repair:", err));
 
   closeRepairModal();
+  cancelEditRepair();
 
   const d = new Date();
   const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${(d.getFullYear()+543)} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
@@ -2872,7 +3008,6 @@ function processClaim() {
   localStorage.setItem('ovb_claims', JSON.stringify(savedClaims));
 
   // 🚀 ส่งข้อมูลเข้า Google Sheets
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
   fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify(claimData)
