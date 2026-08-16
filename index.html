@@ -565,7 +565,8 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
     <div class="nav-tab" onclick="showPage('cart')" style="background:#15803d; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛒 ตะกร้า</div>
     <div class="nav-tab" onclick="showPage('history')" style="background:#6d28d9; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔍 ประวัติ</div>
     <div class="nav-tab admin-only" id="tab-report" onclick="showPage('report')" style="background:#b45309; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">📊 รายงาน</div>
-    <div class="nav-tab" onclick="openClaimModal()" style="background:#c2410c; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛠️ รับเคลม/รับซ่อม</div>
+    <div class="nav-tab" onclick="openClaimModal()" style="background:#c2410c; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛠️ รับเคลม</div>
+    <div class="nav-tab" onclick="openRepairModal()" style="background:#9333ea; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔧 รับซ่อม</div>
     <div class="nav-tab" onclick="openReprintSearch()" style="background:#2563eb; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔎 ค้นหาบิล</div>
     <div class="nav-tab" onclick="openQuoteModal()" style="background:#0f766e; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">📝 ใบเสนอราคา</div>
 </div>
@@ -849,7 +850,7 @@ let currentProd = null;
 
 const fmt = n => n > 0 ? '฿' + n.toLocaleString('th-TH', {minimumFractionDigits:0,maximumFractionDigits:0}) : '-';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxj-BjchABBaAdGg0Lm4uDhpBXeXJDAX1srRihezBcigSmXonGT2xL2RgedTxfUnjP57w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
 
 async function doLogin() {
   const u = document.getElementById('l-user').value.trim().toLowerCase();
@@ -2162,7 +2163,7 @@ async function reprintFromHistory(saleId) {
 <div id="claim-modal" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeClaimModal()">
   <div style="background:#1e1e1e; border:1px solid #333; color:#fff; width:100%; max-width:600px; padding:20px; border-radius:10px; box-sizing:border-box;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
-      <h3 style="margin:0; color:#fff; font-size:18px;">🛠️ ฟอร์มรับเคลม/รับซ่อมสินค้า</h3>
+      <h3 style="margin:0; color:#fff; font-size:18px;">🛠️ ฟอร์มรับเคลมสินค้า</h3>
       <button onclick="closeClaimModal()" style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✕</button>
     </div>
 
@@ -2202,6 +2203,45 @@ async function reprintFromHistory(saleId) {
     <div style="margin-top: 10px; display:flex; gap:10px;">
       <button onclick="closeClaimModal()" style="flex:1; padding:10px; background:transparent; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer;">ยกเลิก</button>
       <button onclick="processClaim()" style="flex:2; background:#ff3333; color:#fff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 บันทึก & พิมพ์ใบรับเคลม</button>
+    </div>
+  </div>
+</div>
+
+<!-- 1B. ฟอร์มรับซ่อมสินค้า (แยกจากใบรับเคลม) -->
+<div id="repair-modal" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;" onclick="if(event.target===this) closeRepairModal()">
+  <div style="background:#1e1e1e; border:1px solid #333; color:#fff; width:100%; max-width:600px; padding:20px; border-radius:10px; box-sizing:border-box;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
+      <h3 style="margin:0; color:#fff; font-size:18px;">🔧 ฟอร์มรับซ่อมสินค้า</h3>
+      <button onclick="closeRepairModal()" style="background:transparent; border:none; color:#aaa; font-size:20px; cursor:pointer;">✕</button>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <input type="text" id="rp-cust" placeholder="ชื่อ-นามสกุล *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
+      <input type="text" id="rp-phone" placeholder="เบอร์โทร *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
+      <input type="text" id="rp-item" placeholder="สินค้าที่ส่งซ่อม *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; grid-column: 1 / -1; box-sizing:border-box;">
+      <textarea id="rp-accessories" placeholder="สิ่งที่นำมาด้วย (เช่น สายชาร์จ, กล่อง)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
+      <textarea id="rp-symptom" placeholder="อาการเสีย *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
+      <div>
+        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ราคาประเมินแจ้งซ่อม (บาท):</label>
+        <input type="number" id="rp-estimate" placeholder="0.00" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ยอดชำระ (บาท):</label>
+        <input type="number" id="rp-paid" placeholder="0.00" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box;">
+      </div>
+      <textarea id="rp-address" placeholder="ที่อยู่ส่งกลับ (ถ้ามี)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
+      <textarea id="rp-remark" placeholder="Remark" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
+    </div>
+
+    <div style="margin-top: 15px; display:flex; gap:8px; align-items:center;">
+      <span style="font-size:12px; color:#999;">รูปแบบพิมพ์:</span>
+      <button id="rp-mode-slip" onclick="repairPrintMode='slip'; document.getElementById('rp-mode-slip').classList.add('active'); document.getElementById('rp-mode-a4').classList.remove('active');" class="active" style="padding:6px 12px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer; font-size:12px;">สลิป 80mm</button>
+      <button id="rp-mode-a4" onclick="repairPrintMode='a4'; document.getElementById('rp-mode-a4').classList.add('active'); document.getElementById('rp-mode-slip').classList.remove('active');" style="padding:6px 12px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer; font-size:12px;">A4</button>
+    </div>
+    <style>#rp-mode-slip.active, #rp-mode-a4.active { border-color:#9333ea !important; color:#9333ea !important; }</style>
+    <div style="margin-top: 10px; display:flex; gap:10px;">
+      <button onclick="closeRepairModal()" style="flex:1; padding:10px; background:transparent; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer;">ยกเลิก</button>
+      <button onclick="processRepair()" style="flex:2; background:#9333ea; color:#fff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 บันทึก & พิมพ์ใบรับซ่อม</button>
     </div>
   </div>
 </div>
@@ -2423,6 +2463,16 @@ function openClaimModal() {
 function closeClaimModal() { document.getElementById('claim-modal').style.display = 'none'; }
 function closeClaimHistory() { document.getElementById('claim-history-modal').style.display = 'none'; }
 
+function openRepairModal() {
+  if(!checkAuthBefore('ทำรายการรับซ่อม')) return;
+  const modal = document.getElementById('repair-modal');
+  if(modal) {
+    modal.style.display = 'flex';
+    document.querySelectorAll('#repair-modal input, #repair-modal textarea').forEach(el => el.value = '');
+  }
+}
+function closeRepairModal() { document.getElementById('repair-modal').style.display = 'none'; }
+
 function searchClaimProductModal(kw) {
   const dropdown = document.getElementById('cl-item-dropdown');
   if(!kw.trim()) { dropdown.style.display = 'none'; return; }
@@ -2561,6 +2611,11 @@ function renderClaimReceipt(claimId, printDate, f, mode) {
   table.appendChild(tbody);
   printDiv.appendChild(table);
 
+  const disclaimer = document.createElement('div');
+  disclaimer.style.cssText = 'margin-top:10px;padding:8px;border:1px dashed #000;font-size:10px;line-height:1.5;color:#000;text-align:center';
+  disclaimer.innerHTML = '<b>เงื่อนไขการบริการ:</b> ลูกค้าต้องสำรองข้อมูลด้วยตนเอง ทางร้านจะไม่รับผิดชอบต่อการสูญหายหรือเสียหายของข้อมูลบนฮาร์ดดิสก์/อุปกรณ์จัดเก็บทุกชนิด เว้นแต่ได้แจ้งและตกลงเป็นลายลักษณ์อักษรกับเจ้าหน้าที่ล่วงหน้า';
+  printDiv.appendChild(disclaimer);
+
   const signBox = document.createElement('div');
   signBox.style.cssText = 'display:flex;justify-content:space-between;margin-top:24px;text-align:center;font-size:11px;color:#000;border-top:1px dashed #000;padding-top:12px';
   signBox.innerHTML = `
@@ -2611,6 +2666,179 @@ function renderClaimReceipt(claimId, printDate, f, mode) {
   }, 500);
 }
 
+// 🖨️ สร้าง "ใบรับซ่อมสินค้า" (แยกจากใบเคลม ใช้ดีไซน์เดียวกับสลิปขาย)
+let repairPrintMode = 'slip';
+function renderRepairReceipt(repairId, printDate, f, mode) {
+  mode = mode || 'slip';
+  let printDiv = document.getElementById('repair-print-layout');
+  if (printDiv) printDiv.remove();
+
+  printDiv = document.createElement('div');
+  printDiv.id = 'repair-print-layout';
+  printDiv.className = 'quote-container';
+  printDiv.style.cssText = 'background:#fff;color:#000;';
+  document.body.appendChild(printDiv);
+
+  const headerBox = document.createElement('div');
+  headerBox.className = 'quote-header-box';
+  const srcHeader = document.querySelector('#page-quote .quote-header-box');
+  if (srcHeader) {
+    const logoWrap = srcHeader.children[0];
+    const brandEl = srcHeader.querySelector('.quote-brand');
+    const subEl = srcHeader.querySelector('.quote-sub');
+    if (logoWrap) headerBox.appendChild(logoWrap.cloneNode(true));
+    if (brandEl) headerBox.appendChild(brandEl.cloneNode(true));
+    if (subEl) headerBox.appendChild(subEl.cloneNode(true));
+  }
+  printDiv.appendChild(headerBox);
+
+  const titleBox = document.createElement('div');
+  titleBox.style.cssText = 'background:#eee;border:1px solid #ccc;border-radius:6px;padding:8px;text-align:center;margin-bottom:12px;font-weight:700;font-size:16px;letter-spacing:1px;color:#000';
+  titleBox.textContent = 'ใบรับซ่อมสินค้า (Repair Receipt)';
+  printDiv.appendChild(titleBox);
+
+  const rows = [
+    ['รหัสใบรับซ่อม', repairId],
+    ['วันที่รับเรื่อง', printDate],
+    ['ชื่อ-นามสกุล', f.cust || '-'],
+    ['เบอร์โทร', f.phone || '-'],
+    ['สินค้าที่ส่งซ่อม', f.item || '-'],
+    ['สิ่งที่นำมาด้วย', f.acc || '-'],
+    ['อาการเสีย', f.symptom || '-'],
+    ['ราคาประเมินแจ้งซ่อม', f.estimate ? f.estimate + ' บาท' : '-'],
+    ['ยอดชำระ', f.paid ? f.paid + ' บาท' : '-'],
+    ['ที่อยู่ส่งกลับ', f.address || '-'],
+    ['Remark', f.remark || '-'],
+    ['ผู้รับเรื่อง', f.seller || 'พนักงาน'],
+  ];
+  const table = document.createElement('table');
+  table.className = 'quote-table';
+  const tbody = document.createElement('tbody');
+  rows.forEach(([label, val]) => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td');
+    td1.style.cssText = 'font-weight:600;width:38%;color:#000';
+    td1.textContent = label;
+    const td2 = document.createElement('td');
+    td2.style.cssText = 'color:#000;word-break:break-word';
+    td2.textContent = val;
+    tr.appendChild(td1); tr.appendChild(td2);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  printDiv.appendChild(table);
+
+  const disclaimer = document.createElement('div');
+  disclaimer.style.cssText = 'margin-top:10px;padding:8px;border:1px dashed #000;font-size:10px;line-height:1.5;color:#000;text-align:center';
+  disclaimer.innerHTML = '<b>เงื่อนไขการบริการ:</b> ลูกค้าต้องสำรองข้อมูลด้วยตนเอง ทางร้านจะไม่รับผิดชอบต่อการสูญหายหรือเสียหายของข้อมูลบนฮาร์ดดิสก์/อุปกรณ์จัดเก็บทุกชนิด เว้นแต่ได้แจ้งและตกลงเป็นลายลักษณ์อักษรกับเจ้าหน้าที่ล่วงหน้า';
+  printDiv.appendChild(disclaimer);
+
+  const signBox = document.createElement('div');
+  signBox.style.cssText = 'display:flex;justify-content:space-between;margin-top:24px;text-align:center;font-size:11px;color:#000;border-top:1px dashed #000;padding-top:12px';
+  signBox.innerHTML = `
+    <div style="width:48%">...................................<br><span style="font-size:10px">( ลูกค้าผู้ส่งซ่อม )</span></div>
+    <div style="width:48%">...................................<br><span style="font-size:10px">( ${f.seller || 'พนักงาน'} )</span><br><span style="font-size:10px">พนักงานผู้รับเรื่อง</span></div>
+  `;
+  printDiv.appendChild(signBox);
+
+  const srcFooter = document.getElementById('slip-footer');
+  if (srcFooter) {
+    const footerClone = srcFooter.cloneNode(true);
+    footerClone.removeAttribute('id');
+    footerClone.style.display = 'block';
+    const divs = footerClone.querySelectorAll(':scope > div');
+    if (divs[0]) divs[0].remove();
+    if (divs[1]) divs[1].remove();
+    if (divs[2]) divs[2].remove();
+    printDiv.appendChild(footerClone);
+  }
+
+  document.body.classList.remove('print-a4', 'print-slip');
+  document.body.classList.add('print-' + mode);
+  setPageSize(mode);
+
+  let printStyle = document.getElementById('repair-print-style');
+  if (!printStyle) {
+    printStyle = document.createElement('style');
+    printStyle.id = 'repair-print-style';
+    document.head.appendChild(printStyle);
+  }
+  printStyle.innerHTML = `
+    @media print {
+      body * { visibility: hidden !important; }
+      #repair-print-layout, #repair-print-layout * { visibility: visible !important; color: #000 !important; }
+      #repair-print-layout { position: absolute; left: 0; top: 0; margin: 0; padding: 0; background: #fff; }
+      #page-quote { display: none !important; }
+      .modal-overlay, #repair-modal { display: none !important; }
+    }
+    @media screen {
+      #repair-print-layout { display: none; }
+    }
+  `;
+
+  setTimeout(() => {
+    window.print();
+    document.body.classList.remove('print-a4', 'print-slip');
+  }, 500);
+}
+
+function processRepair() {
+  const cust = document.getElementById('rp-cust').value.trim();
+  const phone = document.getElementById('rp-phone').value.trim();
+  const item = document.getElementById('rp-item').value.trim();
+  const symptom = document.getElementById('rp-symptom').value.trim();
+
+  if (!cust || !phone || !item || !symptom) {
+    if (typeof showToast === 'function') showToast('❌ กรุณากรอกชื่อ, เบอร์, สินค้า และ อาการเสียให้ครบครับ', 'error');
+    else alert('กรุณากรอกข้อมูลที่มีดอกจัน (*) ให้ครบถ้วนครับ'); return;
+  }
+
+  if (typeof showToast === 'function') showToast('⏳ กำลังบันทึกข้อมูลและสร้างใบรับซ่อม...', 'info');
+
+  const repairId = 'RPR' + Date.now().toString().substring(5);
+  const repairData = {
+    action: "saveRepair",
+    id: repairId, date: new Date().toISOString(),
+    cust: cust, phone: phone, item: item, symptom: symptom,
+    acc: document.getElementById('rp-accessories').value.trim(),
+    estimate: document.getElementById('rp-estimate').value.trim(),
+    paid: document.getElementById('rp-paid').value.trim(),
+    address: document.getElementById('rp-address').value.trim(),
+    remark: document.getElementById('rp-remark').value.trim(),
+    seller: (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน'
+  };
+
+  // 💾 บันทึกลงเครื่อง (ประวัติ)
+  let savedRepairs = [];
+  try { savedRepairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e){}
+  savedRepairs.push(repairData);
+  localStorage.setItem('ovb_repairs', JSON.stringify(savedRepairs));
+
+  // 🚀 ส่งข้อมูลเข้า Google Sheets (ใช้ endpoint เดียวกับใบเคลม)
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(repairData)
+  }).catch(err => console.error("Error saving repair:", err));
+
+  closeRepairModal();
+
+  const d = new Date();
+  const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${(d.getFullYear()+543)} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
+  renderRepairReceipt(repairId, printDate, {
+    cust: cust, phone: phone, item: item, acc: repairData.acc, symptom: symptom,
+    estimate: repairData.estimate, paid: repairData.paid,
+    address: repairData.address, remark: repairData.remark, seller: repairData.seller
+  }, repairPrintMode);
+
+  setTimeout(() => {
+    ['rp-cust', 'rp-phone', 'rp-item', 'rp-accessories', 'rp-symptom', 'rp-estimate', 'rp-paid', 'rp-address', 'rp-remark'].forEach(id => {
+      if (document.getElementById(id)) document.getElementById(id).value = '';
+    });
+  }, 500);
+}
+
 function processClaim() {
   const cust = document.getElementById('cl-cust').value.trim();
   const phone = document.getElementById('cl-phone').value.trim();
@@ -2644,7 +2872,7 @@ function processClaim() {
   localStorage.setItem('ovb_claims', JSON.stringify(savedClaims));
 
   // 🚀 ส่งข้อมูลเข้า Google Sheets
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwkSbAdfS7EHoC3OwC3avtk2L9bKn0Bw7tmOosmRMmlUcqz6wCJ0WiyvtEZfqJfQLTRnA/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEBHBrMTNpAln2CWtqQ5YjCiOJ9Imkt9IilQ5YHvp1fxc69P24QPlieM5wTHNf5oUSWA/exec';
   fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify(claimData)
