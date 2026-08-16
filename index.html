@@ -405,7 +405,6 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   body.print-slip #a4-footer { display: none !important; }
 body.print-slip { margin: 0 !important; padding: 0 !important; }
   body.print-slip .page-quote { padding: 0 !important; margin: 0 !important; }
-  @page { margin: 3mm; size: 80mm auto; }
 }
 
 /* Slip footer (hidden on screen) */
@@ -633,9 +632,9 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <div class="quote-brand" style="font-size:14px;font-weight:600;color:var(--text)">บริษัท โอเวอร์บูสท์คอมพิวเตอร์ จำกัด</div>
         <div class="quote-sub" style="font-size:11px;color:var(--text2);line-height:1.7;margin-top:2px">
           191/7 หมู่17 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000<br>
+          Email: overboostkk191@gmail.com<br>
           <b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622<br>
-          <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526<br>
-          Email: overboostkk191@gmail.com
+          <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526
         </div>
         <div class="quote-meta">
           <div class="quote-meta-item"><label>ลูกค้า</label><p id="q-cust"></p></div>
@@ -1717,9 +1716,22 @@ function setPrintMode(mode) {
   document.getElementById('btn-slip').classList.toggle('active', mode === 'slip');
   document.getElementById('slip-footer').style.display = mode === 'slip' ? 'block' : 'none';
 }
+// ตั้งขนาดกระดาษให้ตรงกับโหมดที่เลือกจริงๆ (a4 = กระดาษ A4 เต็มแผ่น, slip = ม้วนสลิป 80mm)
+function setPageSize(mode) {
+  let el = document.getElementById('dynamic-page-size');
+  if (!el) {
+    el = document.createElement('style');
+    el.id = 'dynamic-page-size';
+    document.head.appendChild(el);
+  }
+  el.innerHTML = mode === 'a4'
+    ? '@media print { @page { margin: 12mm; size: A4; } }'
+    : '@media print { @page { margin: 3mm; size: 80mm auto; } }';
+}
 function doPrint() {
   document.body.classList.remove('print-a4', 'print-slip');
   document.body.classList.add('print-' + printMode);
+  setPageSize(printMode);
   window.print();
   setTimeout(() => {
     document.body.classList.remove('print-a4', 'print-slip');
@@ -2181,7 +2193,13 @@ async function reprintFromHistory(saleId) {
       <textarea id="cl-distry" placeholder="Remark ตัวแทนจำหน่าย (Distry)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; box-sizing:border-box; font-family:inherit;"></textarea>
     </div>
 
-    <div style="margin-top: 15px; display:flex; gap:10px;">
+    <div style="margin-top: 15px; display:flex; gap:8px; align-items:center;">
+      <span style="font-size:12px; color:#999;">รูปแบบพิมพ์:</span>
+      <button id="cl-mode-slip" onclick="claimPrintMode='slip'; document.getElementById('cl-mode-slip').classList.add('active'); document.getElementById('cl-mode-a4').classList.remove('active');" class="active" style="padding:6px 12px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer; font-size:12px;">สลิป 80mm</button>
+      <button id="cl-mode-a4" onclick="claimPrintMode='a4'; document.getElementById('cl-mode-a4').classList.add('active'); document.getElementById('cl-mode-slip').classList.remove('active');" style="padding:6px 12px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer; font-size:12px;">A4</button>
+    </div>
+    <style>#cl-mode-slip.active, #cl-mode-a4.active { border-color:#ff3333 !important; color:#ff3333 !important; }</style>
+    <div style="margin-top: 10px; display:flex; gap:10px;">
       <button onclick="closeClaimModal()" style="flex:1; padding:10px; background:transparent; border:1px solid #333; color:#fff; border-radius:6px; cursor:pointer;">ยกเลิก</button>
       <button onclick="processClaim()" style="flex:2; background:#ff3333; color:#fff; padding:10px; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 บันทึก & พิมพ์ใบรับเคลม</button>
     </div>
@@ -2481,7 +2499,9 @@ function selectClaimBill(idx) {
 }
 
 // 🖨️ สร้าง "ใบรับเคลมสินค้า" โดยใช้ดีไซน์เดียวกับสลิปขายสินค้าเป๊ะๆ (โคลนโลโก้/หัวบิล/ท้ายบิลจากหน้าใบเสร็จ)
-function renderClaimReceipt(claimId, printDate, f) {
+let claimPrintMode = 'slip';
+function renderClaimReceipt(claimId, printDate, f, mode) {
+  mode = mode || 'slip';
   let printDiv = document.getElementById('claim-print-layout');
   if (printDiv) printDiv.remove();
 
@@ -2507,7 +2527,7 @@ function renderClaimReceipt(claimId, printDate, f) {
 
   const titleBox = document.createElement('div');
   titleBox.style.cssText = 'background:#eee;border:1px solid #ccc;border-radius:6px;padding:8px;text-align:center;margin-bottom:12px;font-weight:700;font-size:16px;letter-spacing:1px;color:#000';
-  titleBox.textContent = 'ใบรับเคลมสินค้า (Claim Receipt)';
+  titleBox.textContent = 'ใบรับเคลม-ซ่อมสินค้า (Claim / Repair Receipt)';
   printDiv.appendChild(titleBox);
 
   const rows = [
@@ -2563,7 +2583,8 @@ function renderClaimReceipt(claimId, printDate, f) {
   }
 
   document.body.classList.remove('print-a4', 'print-slip');
-  document.body.classList.add('print-slip');
+  document.body.classList.add('print-' + mode);
+  setPageSize(mode);
 
   let printStyle = document.getElementById('claim-print-style');
   if (!printStyle) {
@@ -2643,7 +2664,7 @@ function processClaim() {
     cust: cust, phone: phone, item: item, sn: claimData.sn,
     buyDateStr: datePrint, symptom: symptom, acc: claimData.acc,
     address: claimData.address, distry: claimData.distry, seller: claimData.seller
-  });
+  }, claimPrintMode);
 
   // ล้างช่องกรอกข้อมูล
   setTimeout(() => {
