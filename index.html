@@ -754,7 +754,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
       <div style="font-size:12px" id="rpt-print-date-label"></div>
     </div>
     <div class="report-header">
-      <h2 style="font-size:18px">📊 รายงานการขาย</h2>
+      <h2 style="font-size:18px" id="rpt-title">📊 รายงานการขาย</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="exportReport(this)" class="btn-print no-print" style="width:auto;padding:6px 16px;color:#22c55e;border-color:#22c55e">📥 Export Excel</button>
       </div>
@@ -770,11 +770,16 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <input type="text" id="rpt-search" placeholder="🔍 ค้นหาชื่อ/เบอร์/สินค้า..." oninput="renderReport()" style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;min-width:180px">
       </div>
     </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px" id="rpt-view-tabs">
+      <button onclick="setReportView('sales')" id="rpt-tab-sales" class="rpt-tab active" style="padding:8px 16px;background:var(--red);border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:13px;font-weight:600">💰 ยอดขาย</button>
+      <button onclick="setReportView('claims')" id="rpt-tab-claims" class="rpt-tab" style="padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;font-weight:600">🛠️ การเคลม</button>
+      <button onclick="setReportView('repairs')" id="rpt-tab-repairs" class="rpt-tab" style="padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;font-weight:600">🔧 การซ่อม</button>
+    </div>
     <div class="stats-grid" id="stats-grid"></div>
     <div class="sales-table-wrap">
       <table class="sales-table">
         <thead>
-          <tr>
+          <tr id="report-thead-row">
             <th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th>
             <th>รายการ</th><th>จำนวน</th><th style="text-align:right">ยอด</th><th></th>
           </tr>
@@ -1570,14 +1575,33 @@ function getSales() {
   try { return JSON.parse(localStorage.getItem('ovb_sales') || '[]'); } catch { return []; }
 }
 
+let reportViewMode = 'sales';
+function setReportView(mode) {
+  reportViewMode = mode;
+  ['sales','claims','repairs'].forEach(m => {
+    const tab = document.getElementById('rpt-tab-' + m);
+    if (!tab) return;
+    tab.style.background = (m === mode) ? 'var(--red)' : 'var(--bg2)';
+    tab.style.border = (m === mode) ? 'none' : '1px solid var(--border)';
+    tab.style.color = (m === mode) ? '#fff' : 'var(--text)';
+  });
+  const titles = { sales: '📊 รายงานการขาย', claims: '🛠️ รายงานการเคลม', repairs: '🔧 รายงานการซ่อม' };
+  document.getElementById('rpt-title').textContent = titles[mode];
+  renderReport();
+}
+
 async function renderReport() {
   if (currentUser?.role !== 'admin') return;
+  if (reportViewMode === 'claims') return renderClaimsReport();
+  if (reportViewMode === 'repairs') return renderRepairsReport();
 
   const dateInput = document.getElementById('rpt-date')?.value || "";
   const monthInput = document.getElementById('rpt-month')?.value || "";
   const sellerFilter = document.getElementById('rpt-seller')?.value || "";
-  const searchInput = document.getElementById('search-input')?.value.trim().toLowerCase() || "";
+  const searchInput = document.getElementById('rpt-search')?.value.trim().toLowerCase() || "";
 
+  document.getElementById('report-thead-row').innerHTML =
+    '<th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th><th>รายการ</th><th>จำนวน</th><th style="text-align:right">ยอด</th><th></th>';
   document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
 
   let allSales = [];
@@ -1643,6 +1667,7 @@ async function renderReport() {
     }
     
     if (isNaN(d.getTime())) return false;
+    s._sortTime = d.getTime(); // เก็บ timestamp ที่แปลงถูกต้องแล้ว ไว้ใช้เรียงลำดับ (แก้บั๊กลำดับสลับมั่ว)
 
     // ดึงค่า ปี-เดือน-วัน ตามเวลาท้องถิ่นตรงๆ (แก้บั๊กเดือนกระโดด/ไม่ตรง 100%)
     const y = d.getFullYear();
@@ -1686,7 +1711,7 @@ async function renderReport() {
     return;
   }
   
-  filteredSales.sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')));
+  filteredSales.sort((a, b) => (b._sortTime || 0) - (a._sortTime || 0));
   window._lastSales = filteredSales;
   
   document.getElementById('report-body').innerHTML = filteredSales.map(s => {
@@ -1771,6 +1796,7 @@ function doPrint() {
 
 async function exportReport(btnEl) {
   const btn = btnEl || event.target;
+  if (reportViewMode !== 'sales') return exportClaimsOrRepairsReport(btn);
   btn.textContent = '⏳ กำลังโหลด...';
   btn.disabled = true;
 
@@ -1829,6 +1855,192 @@ async function exportReport(btnEl) {
     showToast('❌ Export ไม่สำเร็จ: ' + e.message, 'error');
   }
 
+  btn.textContent = '📥 Export Excel';
+  btn.disabled = false;
+}
+
+// ===== ตัวช่วยแปลงวันที่แบบยืดหยุ่น ใช้ร่วมกันทั้งเคลม/ซ่อม (กัน sort/filter เพี้ยน) =====
+function parseFlexDate(timeStr) {
+  if (!timeStr) return null;
+  let d = new Date(timeStr);
+  if (!isNaN(d.getTime())) return d;
+  const s = String(timeStr).replace('T', ' ');
+  const datePart = s.split(' ')[0];
+  const p = datePart.split(/[-/]/);
+  if (p.length === 3) {
+    let y = parseInt(p[2]), m = parseInt(p[1]) - 1, day = parseInt(p[0]);
+    if (m > 11) { m = parseInt(p[0]) - 1; day = parseInt(p[1]); }
+    if (y > 2500) y -= 543;
+    if (y < 100) y += 2000;
+    d = new Date(y, m, day);
+  }
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function applyReportFilters(rows, dateField) {
+  const dateInput = document.getElementById('rpt-date')?.value || "";
+  const monthInput = document.getElementById('rpt-month')?.value || "";
+  const sellerFilter = document.getElementById('rpt-seller')?.value || "";
+  const searchInput = document.getElementById('rpt-search')?.value.trim().toLowerCase() || "";
+
+  let dateInputFixed = dateInput;
+  if (dateInput) {
+    const parts = dateInput.split('-');
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0]);
+      dateInputFixed = `${year > 2500 ? year - 543 : year}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+    }
+  }
+  let monthInputFixed = monthInput;
+  if (monthInput) {
+    const parts = monthInput.split('-');
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0]);
+      monthInputFixed = `${year > 2500 ? year - 543 : year}-${parts[1].padStart(2,'0')}`;
+    }
+  }
+
+  return rows.filter(r => {
+    const d = parseFlexDate(r[dateField]);
+    if (!d) return false;
+    r._sortTime = d.getTime();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${day}`;
+    const monthStr = `${y}-${m}`;
+
+    if (dateInputFixed && dateStr !== dateInputFixed) return false;
+    if (!dateInputFixed && monthInputFixed && monthStr !== monthInputFixed) return false;
+    if (sellerFilter && r.seller !== sellerFilter) return false;
+    if (!searchInput) return true;
+
+    const nameMatch = (r.cust || "").toLowerCase().includes(searchInput);
+    const itemMatch = (r.item || "").toLowerCase().includes(searchInput);
+    const dbPhone = String(r.phone || "").replace(/[^0-9]/g, '').replace(/^0+/, '');
+    const searchNum = searchInput.replace(/[^0-9]/g, '').replace(/^0+/, '');
+    const phoneMatch = searchNum.length > 0 && dbPhone.includes(searchNum);
+    return nameMatch || itemMatch || phoneMatch;
+  }).sort((a, b) => (b._sortTime || 0) - (a._sortTime || 0));
+}
+
+async function renderClaimsReport() {
+  document.getElementById('report-thead-row').innerHTML =
+    '<th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th><th>สินค้า/อาการเสีย</th><th>S/N</th><th></th><th></th>';
+  document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
+
+  let claims = [];
+  try {
+    const res = await fetch(API_URL + '?action=getClaims');
+    const data = await res.json();
+    claims = data.claims || [];
+  } catch(e) {
+    try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e2) {}
+  }
+
+  const filtered = applyReportFilters(claims, 'date');
+  window._lastClaims = filtered;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">จำนวนรายการเคลม</div><div class="stat-val red">${filtered.length}</div></div>
+    <div class="stat-card"><div class="stat-label">รับวันนี้</div><div class="stat-val">${filtered.filter(c => { const d = parseFlexDate(c.date); return d && d.toDateString() === new Date().toDateString(); }).length}</div></div>
+    <div class="stat-card"><div class="stat-label">พนักงานที่รับเรื่อง</div><div class="stat-val green">${[...new Set(filtered.map(c=>c.seller).filter(Boolean))].length}</div></div>
+    <div class="stat-card"><div class="stat-label">-</div><div class="stat-val">-</div></div>`;
+
+  if (filtered.length === 0) {
+    document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+
+  document.getElementById('report-body').innerHTML = filtered.map(c => {
+    const d = parseFlexDate(c.date);
+    const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
+    return `<tr>
+      <td style="white-space:nowrap">${t}</td>
+      <td><span class="seller-badge">${c.seller || '-'}</span></td>
+      <td>${c.cust || '-'}</td>
+      <td style="font-size:12px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.item || '-'} — ${c.symptom || '-'}</td>
+      <td style="font-size:12px">${c.sn || '-'}</td>
+      <td></td>
+      <td><button onclick="reprintClaim('${c.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px">🖨️ พิมพ์</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function renderRepairsReport() {
+  document.getElementById('report-thead-row').innerHTML =
+    '<th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th><th>สินค้า/อาการเสีย</th><th>ประเมิน/ชำระ</th><th></th><th></th>';
+  document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
+
+  let repairs = [];
+  try {
+    const res = await fetch(API_URL + '?action=getRepairs');
+    const data = await res.json();
+    repairs = data.repairs || [];
+  } catch(e) {
+    try { repairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e2) {}
+  }
+
+  const filtered = applyReportFilters(repairs, 'date');
+  window._lastRepairs = filtered;
+
+  const totalPaid = filtered.reduce((s, r) => s + (Number(r.paid) || 0), 0);
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">จำนวนรายการซ่อม</div><div class="stat-val red">${filtered.length}</div></div>
+    <div class="stat-card"><div class="stat-label">ยอดชำระรวม</div><div class="stat-val">${fmt(totalPaid)}</div></div>
+    <div class="stat-card"><div class="stat-label">พนักงานที่รับเรื่อง</div><div class="stat-val green">${[...new Set(filtered.map(r=>r.seller).filter(Boolean))].length}</div></div>
+    <div class="stat-card"><div class="stat-label">-</div><div class="stat-val">-</div></div>`;
+
+  if (filtered.length === 0) {
+    document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">ไม่มีข้อมูล</td></tr>';
+    return;
+  }
+
+  document.getElementById('report-body').innerHTML = filtered.map(r => {
+    const d = parseFlexDate(r.date);
+    const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
+    return `<tr>
+      <td style="white-space:nowrap">${t}</td>
+      <td><span class="seller-badge">${r.seller || '-'}</span></td>
+      <td>${r.cust || '-'}</td>
+      <td style="font-size:12px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item || '-'} — ${r.symptom || '-'}</td>
+      <td style="font-size:12px">ประเมิน ${r.estimate || '-'} / ชำระ ${r.paid || '-'}</td>
+      <td></td>
+      <td><button onclick='loadRepairForEdit(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px" title="เปิดฟอร์มซ่อมเพื่อแก้ไข">✏️ แก้ไข</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function exportClaimsOrRepairsReport(btn) {
+  btn.textContent = '⏳ กำลังโหลด...';
+  btn.disabled = true;
+  const isClaims = reportViewMode === 'claims';
+  const rows = isClaims ? (window._lastClaims || []) : (window._lastRepairs || []);
+
+  if (rows.length === 0) {
+    showToast('ไม่มีข้อมูลให้ Export', 'error');
+    btn.textContent = '📥 Export Excel';
+    btn.disabled = false;
+    return;
+  }
+
+  const csvRows = isClaims
+    ? [['รหัสเคลม','วันที่','ลูกค้า','เบอร์โทร','สินค้า','S/N','อาการเสีย','พนักงาน'],
+       ...rows.map(c => [c.id, c.date, c.cust, c.phone, c.item, c.sn, c.symptom, c.seller])]
+    : [['รหัสซ่อม','วันที่','ลูกค้า','เบอร์โทร','สินค้า','อาการเสีย','ประเมินราคา','ยอดชำระ','พนักงาน'],
+       ...rows.map(r => [r.id, r.date, r.cust, r.phone, r.item, r.symptom, r.estimate, r.paid, r.seller])];
+
+  const csv = '﻿' + csvRows.map(r => r.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `overboost_${isClaims ? 'claims' : 'repairs'}_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast(`✅ Export ${rows.length} รายการสำเร็จ!`, 'success');
   btn.textContent = '📥 Export Excel';
   btn.disabled = false;
 }
@@ -2585,6 +2797,11 @@ async function searchRepairHistory() {
 }
 
 function loadRepairForEdit(r) {
+  const modal = document.getElementById('repair-modal');
+  if (modal && modal.style.display !== 'flex') {
+    if (!checkAuthBefore('ทำรายการรับซ่อม')) return;
+    modal.style.display = 'flex';
+  }
   document.getElementById('rp-cust').value = r.cust || '';
   document.getElementById('rp-phone').value = r.phone || '';
   document.getElementById('rp-item').value = r.item || '';
@@ -3041,19 +3258,37 @@ function openClaimHistory() {
   if(!checkAuthBefore('ดูประวัติเคลม')) return;
   document.getElementById('claim-history-modal').style.display = 'flex';
   document.getElementById('hist-claim-search').value = '';
+  _claimsHistCache = null; // บังคับโหลดใหม่ทุกครั้งที่เปิดหน้าต่าง (กันข้อมูลค้าง)
   renderClaimHistory('');
 }
 
-function renderClaimHistory(keyword) {
+let _claimsHistCache = null;
+async function renderClaimHistory(keyword) {
   const listEl = document.getElementById('claim-history-list');
-  let claims = [];
-  try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e){}
+
+  // ถ้ามี cache แล้ว แค่กรองใหม่ ไม่ต้องยิง API ซ้ำทุกครั้งที่พิมพ์ค้นหา
+  if (_claimsHistCache === null) {
+    listEl.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">⏳ กำลังโหลดข้อมูล...</div>';
+    // 🔍 ดึงจาก Google Sheets จริงก่อน (เห็นเคลมจากทุกเครื่อง/ทุกคน) ถ้าเน็ตล่มค่อย fallback เป็นเครื่องนี้
+    let claims = [];
+    try {
+      const res = await fetch(API_URL + '?action=getClaims');
+      const data = await res.json();
+      claims = data.claims || [];
+    } catch(e) {
+      try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e2) {}
+    }
+    claims.sort((a,b) => new Date(b.date) - new Date(a.date));
+    _claimsHistCache = claims;
+  }
+
+  let claims = _claimsHistCache;
   if(claims.length === 0) { listEl.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">ไม่มีประวัติการรับเคลมในระบบ</div>'; return; }
-  claims.sort((a,b) => new Date(b.date) - new Date(b.date));
   if(keyword) {
     const kw = keyword.toLowerCase();
     claims = claims.filter(c => (c.cust||'').toLowerCase().includes(kw) || (c.phone||'').includes(kw) || (c.item||'').toLowerCase().includes(kw) || (c.sn||'').toLowerCase().includes(kw) || (c.id||'').toLowerCase().includes(kw));
   }
+  if(claims.length === 0) { listEl.innerHTML = '<div style="text-align:center; padding:40px; color:#aaa;">ไม่พบรายการที่ค้นหา</div>'; return; }
   listEl.innerHTML = claims.map(c => {
     const d = new Date(c.date);
     const dateStr = d.toLocaleDateString('th-TH', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -3365,16 +3600,28 @@ if (!document.getElementById('deposit-modal')) {
     const modalDiv = document.createElement('div');
     modalDiv.innerHTML = `
         <div id="deposit-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 99999; align-items: center; justify-content: center;">
-            <div style="background: #1a1a1a; padding: 20px; border-radius: 10px; width: 90%; max-width: 350px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #444;">
+            <div style="background: #1a1a1a; padding: 20px; border-radius: 10px; width: 90%; max-width: 380px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #444; max-height: 90vh; overflow-y: auto;">
                 <h3 style="color: #eab308; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px;">💰 รับเงินมัดจำ</h3>
-                <input type="text" id="dep-cust" placeholder="ชื่อลูกค้า" style="width: 100%; padding: 10px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
-                <input type="number" id="dep-amount" placeholder="ยอดมัดจำ (บาท)" style="width: 100%; padding: 10px; margin: 0 0 15px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
-                <button onclick="processDeposit()" style="width: 100%; padding: 10px; background: #eab308; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px;">💾 บันทึกมัดจำ</button>
+                <input type="text" id="dep-cust" placeholder="ชื่อลูกค้า *" style="width: 100%; padding: 10px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <input type="text" id="dep-phone" placeholder="เบอร์โทร" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <textarea id="dep-items" placeholder="รายการสินค้า/รายละเอียด" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box; height: 60px; resize: none; font-family: inherit;"></textarea>
+                <input type="number" id="dep-total" placeholder="ยอดรวมทั้งหมด (บาท)" oninput="updateDepositBalance()" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <input type="number" id="dep-amount" placeholder="ยอดมัดจำ (บาท) *" oninput="updateDepositBalance()" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <div style="font-size: 13px; color: #aaa; margin-bottom: 15px;">คงเหลือ: <b id="dep-balance-display" style="color: #eab308;">0.00</b> บาท</div>
+                <button onclick="processDeposit()" style="width: 100%; padding: 10px; background: #eab308; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px;">💾 บันทึก &amp; พิมพ์ใบมัดจำ</button>
                 <button onclick="document.getElementById('deposit-modal').style.display='none'" style="width: 100%; padding: 10px; background: #444; border: none; color: #fff; margin-top: 10px; cursor: pointer; border-radius: 4px;">ยกเลิก</button>
             </div>
         </div>
     `;
     document.body.appendChild(modalDiv);
+}
+
+function updateDepositBalance() {
+    const total = Number(document.getElementById('dep-total')?.value) || 0;
+    const dep = Number(document.getElementById('dep-amount')?.value) || 0;
+    const bal = Math.max(0, total - dep);
+    const el = document.getElementById('dep-balance-display');
+    if (el) el.textContent = bal.toLocaleString('th-TH', {minimumFractionDigits: 2});
 }
 
 // 2. ฟังก์ชันเสกปุ่มเข้าไปในหน้าตะกร้า (ทำงานเงียบๆ เบื้องหลัง)
@@ -3394,27 +3641,159 @@ setInterval(() => {
     }
 }, 1000);
 
-// 3. ฟังก์ชันส่งข้อมูลเข้า Google Sheet
+// 3. 🖨️ สร้างใบมัดจำ (ใช้ดีไซน์เดียวกับสลิปขาย/ใบเคลม/ใบซ่อม)
+function renderDepositReceipt(depositId, printDate, f) {
+  let printDiv = document.getElementById('deposit-print-layout');
+  if (printDiv) printDiv.remove();
+
+  printDiv = document.createElement('div');
+  printDiv.id = 'deposit-print-layout';
+  printDiv.className = 'quote-container';
+  printDiv.style.cssText = 'background:#fff;color:#000;';
+  document.body.appendChild(printDiv);
+
+  const headerBox = document.createElement('div');
+  headerBox.className = 'quote-header-box';
+  const srcHeader = document.querySelector('#page-quote .quote-header-box');
+  if (srcHeader) {
+    const logoWrap = srcHeader.children[0];
+    const brandEl = srcHeader.querySelector('.quote-brand');
+    const subEl = srcHeader.querySelector('.quote-sub');
+    if (logoWrap) headerBox.appendChild(logoWrap.cloneNode(true));
+    if (brandEl) headerBox.appendChild(brandEl.cloneNode(true));
+    if (subEl) headerBox.appendChild(subEl.cloneNode(true));
+  }
+  printDiv.appendChild(headerBox);
+
+  const titleBox = document.createElement('div');
+  titleBox.style.cssText = 'background:#eee;border:1px solid #ccc;border-radius:6px;padding:8px;text-align:center;margin-bottom:12px;font-weight:700;font-size:16px;letter-spacing:1px;color:#000';
+  titleBox.textContent = 'ใบรับเงินมัดจำ (Deposit Receipt)';
+  printDiv.appendChild(titleBox);
+
+  const rows = [
+    ['รหัสบิล', depositId],
+    ['วันที่', printDate],
+    ['ชื่อลูกค้า', f.cust || '-'],
+    ['เบอร์โทร', f.phone || '-'],
+    ['รายการสินค้า', f.items || '-'],
+    ['ยอดรวมทั้งหมด', f.total ? Number(f.total).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
+    ['มัดจำแล้ว', f.deposit ? Number(f.deposit).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
+    ['คงเหลือ', f.balance !== undefined ? Number(f.balance).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
+    ['ผู้รับมัดจำ', f.seller || 'พนักงาน'],
+  ];
+  const table = document.createElement('table');
+  table.className = 'quote-table';
+  const tbody = document.createElement('tbody');
+  rows.forEach(([label, val]) => {
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td');
+    td1.style.cssText = 'font-weight:600;width:38%;color:#000';
+    td1.textContent = label;
+    const td2 = document.createElement('td');
+    td2.style.cssText = 'color:#000;word-break:break-word';
+    td2.textContent = val;
+    tr.appendChild(td1); tr.appendChild(td2);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  printDiv.appendChild(table);
+
+  const noteBox = document.createElement('div');
+  noteBox.style.cssText = 'margin-top:10px;padding:8px;border:1px dashed #000;font-size:10px;line-height:1.5;color:#000;text-align:center';
+  noteBox.innerHTML = '<b>หมายเหตุ:</b> กรุณาเก็บใบมัดจำนี้ไว้เป็นหลักฐานในการรับสินค้า/ชำระเงินส่วนที่เหลือ';
+  printDiv.appendChild(noteBox);
+
+  const signBox = document.createElement('div');
+  signBox.style.cssText = 'display:flex;justify-content:space-between;margin-top:24px;text-align:center;font-size:11px;color:#000;border-top:1px dashed #000;padding-top:12px';
+  signBox.innerHTML = `
+    <div style="width:48%">...................................<br><span style="font-size:10px">( ลูกค้าผู้มัดจำ )</span></div>
+    <div style="width:48%">...................................<br><span style="font-size:10px">( ${f.seller || 'พนักงาน'} )</span><br><span style="font-size:10px">พนักงานผู้รับมัดจำ</span></div>
+  `;
+  printDiv.appendChild(signBox);
+
+  const srcFooter = document.getElementById('slip-footer');
+  if (srcFooter) {
+    const footerClone = srcFooter.cloneNode(true);
+    footerClone.removeAttribute('id');
+    footerClone.style.display = 'block';
+    const divs = footerClone.querySelectorAll(':scope > div');
+    if (divs[0]) divs[0].remove();
+    if (divs[1]) divs[1].remove();
+    if (divs[2]) divs[2].remove();
+    printDiv.appendChild(footerClone);
+  }
+
+  document.body.classList.remove('print-a4', 'print-slip');
+  document.body.classList.add('print-slip');
+  if (typeof setPageSize === 'function') setPageSize('slip');
+
+  let printStyle = document.getElementById('deposit-print-style');
+  if (!printStyle) {
+    printStyle = document.createElement('style');
+    printStyle.id = 'deposit-print-style';
+    document.head.appendChild(printStyle);
+  }
+  printStyle.innerHTML = `
+    @media print {
+      body * { visibility: hidden !important; }
+      #deposit-print-layout, #deposit-print-layout * { visibility: visible !important; color: #000 !important; }
+      #deposit-print-layout { position: absolute; left: 0; top: 0; margin: 0; padding: 0; background: #fff; }
+      #page-quote { display: none !important; }
+      .modal-overlay, #deposit-modal { display: none !important; }
+    }
+    @media screen {
+      #deposit-print-layout { display: none; }
+    }
+  `;
+
+  setTimeout(() => {
+    window.print();
+    document.body.classList.remove('print-a4', 'print-slip');
+  }, 500);
+}
+
+// 4. ฟังก์ชันส่งข้อมูลเข้า Google Sheet + พิมพ์ใบมัดจำ
 function processDeposit() {
-    const cust = document.getElementById('dep-cust').value;
-    const amt = document.getElementById('dep-amount').value;
+    const cust = document.getElementById('dep-cust').value.trim();
+    const phone = document.getElementById('dep-phone').value.trim();
+    const items = document.getElementById('dep-items').value.trim();
+    const total = document.getElementById('dep-total').value.trim();
+    const amt = document.getElementById('dep-amount').value.trim();
     if(!cust || !amt) { alert('กรุณากรอกชื่อและยอดมัดจำให้ครบถ้วนครับ'); return; }
-    
+
+    const balance = Math.max(0, (Number(total) || 0) - (Number(amt) || 0));
+    const depositId = 'DEP' + Date.now().toString().substring(5);
+    const d = new Date();
+    const printDate = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${(d.getFullYear()+543)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    const seller = (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน';
+
+    const depositData = {
+        id: depositId, date: new Date().toISOString(),
+        cust: cust, phone: phone, items: items,
+        total: total, deposit: amt, balance: balance,
+        seller: seller
+    };
+
     // ระบบจะดึง SCRIPT_URL ที่คุณโต้งมีอยู่แล้วมาใช้เองอัตโนมัติ
     const url = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : (typeof scriptUrl !== 'undefined' ? scriptUrl : ''); 
     if(!url) { alert('ไม่พบการเชื่อมต่อ SCRIPT_URL'); return; }
 
     document.getElementById('deposit-modal').style.display='none'; // ปิดหน้าต่างรอ
-    
+
     fetch(url, {
         method: 'POST',
-        body: JSON.stringify({ action: 'saveDeposit', data: { cust: cust, deposit: amt } })
-    }).then(() => { 
-        alert('✅ บันทึกมัดจำเรียบร้อยแล้ว!'); 
-        location.reload(); 
-    }).catch(err => {
-        alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
+        body: JSON.stringify({ action: 'saveDeposit', data: depositData })
+    }).catch(err => console.error('Error saving deposit:', err));
+
+    renderDepositReceipt(depositId, printDate, {
+      cust: cust, phone: phone, items: items, total: total, deposit: amt, balance: balance, seller: seller
     });
+
+    ['dep-cust','dep-phone','dep-items','dep-total','dep-amount'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    updateDepositBalance();
 }
 </script>
 <script>
