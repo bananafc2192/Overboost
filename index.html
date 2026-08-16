@@ -775,7 +775,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
       <table class="sales-table">
         <thead>
           <tr>
-            <th>เวลา</th><th>พนักงาน</th><th>ลูกค้า</th>
+            <th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th>
             <th>รายการ</th><th>จำนวน</th><th style="text-align:right">ยอด</th><th></th>
           </tr>
         </thead>
@@ -1669,7 +1669,7 @@ async function renderReport() {
   document.getElementById('report-body').innerHTML = filteredSales.map(s => {
     let d = new Date(s.time);
     if (isNaN(d.getTime())) d = new Date(String(s.time).replace(/-/g, '/').replace('T', ' '));
-    const t = isNaN(d.getTime()) ? '-' : d.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
+    const t = isNaN(d.getTime()) ? '-' : d.toLocaleDateString('th-TH', {day:'2-digit', month:'2-digit', year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'});
     
     const itemsArray = Array.isArray(s.items) ? s.items : [];
     const itemList = itemsArray.map(i => `${(i.name || '').substring(0,20)} x${i.qty || 0}`).join(', ');
@@ -1677,7 +1677,7 @@ async function renderReport() {
     const total = Number(s.total) || 0;
 
     return `<tr>
-      <td>${t}</td>
+      <td style="white-space:nowrap">${t}</td>
       <td><span class="seller-badge">${s.sellerName || s.seller || '-'}</span></td>
       <td>${s.customer || '-'}</td>
       <td style="font-size:12px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${itemList}</td>
