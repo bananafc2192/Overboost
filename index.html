@@ -634,17 +634,18 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <div class="quote-sub" style="font-size:11px;color:var(--text2);line-height:1.7;margin-top:2px">
           191/7 หมู่17 ต.ในเมือง อ.เมือง จ.ขอนแก่น 40000<br>
           Email: overboostkk191@gmail.com<br>
-          <b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622<br>
-          <b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760, 084-5535526
+          <span style="white-space:nowrap"><b>โอเวอร์บูสท์ สำนักงานใหญ่ (Bnn เทคโนภาคฯ):</b> 065-6625622</span><br>
+          <span style="white-space:nowrap"><b>อัลฟ่าไอที สาขาตึกคอม:</b> 098-2035760,</span> <span style="white-space:nowrap">084-5535526</span>
         </div>
         <div class="quote-meta">
           <div class="quote-meta-item"><label>ลูกค้า</label><p id="q-cust"></p></div>
           <div class="quote-meta-item"><label>เบอร์โทร</label><p id="q-phone"></p></div>
           <div class="quote-meta-item"><label>วันที่</label><p id="q-date"></p></div>
           <div class="quote-meta-item"><label>ผู้ขาย</label><p id="q-seller"></p></div>
-          <div class="quote-meta-item"><label>หมายเหตุ</label><p id="q-note"></p></div>
+          <div class="quote-meta-item" style="grid-column:1/-1"><label>หมายเหตุ / S/N สินค้า (แก้ไขก่อนพิมพ์ได้)</label><textarea id="q-note" rows="2" style="width:100%;font-family:inherit;font-size:inherit;color:inherit;background:transparent;border:1px dashed var(--border);border-radius:4px;padding:4px 6px;resize:vertical;margin-top:2px"></textarea></div>
         </div>
       </div>
+      <style>@media print { #q-note { border:none !important; padding:0 !important; resize:none !important; } }</style>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center;margin-bottom:12px;font-weight:700;font-size:16px;letter-spacing:1px">
         ใบเสร็จรับเงิน
       </div>
@@ -1482,7 +1483,7 @@ function goToQuote() {
   const custNote = document.getElementById('cust-note').value || '-';
   document.getElementById('q-cust').textContent = custName;
   document.getElementById('q-phone').textContent = custPhone;
-  document.getElementById('q-note').textContent = custNote;
+  document.getElementById('q-note').value = custNote;
   document.getElementById('q-date').textContent = new Date().toLocaleDateString('th-TH', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('q-seller').textContent = currentUser.name;
 
@@ -1530,7 +1531,7 @@ async function confirmSale() {
     sellerName: currentUser.name,
     customer: custName,
     phone: document.getElementById('q-phone').textContent,
-    note: document.getElementById('q-note').textContent,
+    note: document.getElementById('q-note').value,
     items: JSON.parse(JSON.stringify(cart)),
     total: finalGrand,     // บันทึกยอดที่หักส่วนลดแล้วให้ถูกต้อง
     discount: discountVal  // เก็บประวัติไว้ด้วยว่าบิลนี้ลดไปเท่าไหร่
@@ -2085,7 +2086,7 @@ function reprintSale(saleId) {
   // Fill quote page with sale data
   document.getElementById('q-cust').textContent = saleData.customer || '-';
   document.getElementById('q-phone').textContent = saleData.phone || '-';
-  document.getElementById('q-note').textContent = saleData.note || '-';
+  document.getElementById('q-note').value = saleData.note || '';
   const t = new Date(saleData.time);
   document.getElementById('q-date').textContent = t.toLocaleDateString('th-TH', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   document.getElementById('q-seller').textContent = saleData.sellerName || saleData.seller;
@@ -2355,7 +2356,7 @@ async function reprintFromHistory(saleId) {
   if (!saleData) { showToast('ไม่พบข้อมูลบิล', 'error'); return; }
   document.getElementById('q-cust').textContent   = saleData.customer || '-';
   document.getElementById('q-phone').textContent  = saleData.phone    || '-';
-  document.getElementById('q-note').textContent   = saleData.note     || '-';
+  document.getElementById('q-note').value   = saleData.note     || '';
   const t = new Date(saleData.time);
   document.getElementById('q-date').textContent   = isNaN(t) ? saleData.time :
     t.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
