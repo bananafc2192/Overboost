@@ -613,7 +613,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
           <input class="customer-input" id="cust-phone" placeholder="เบอร์โทร (ถ้ามี)">
           <input class="customer-input" id="cust-note" placeholder="หมายเหตุ (ถ้ามี)">
           <div id="cart-summary-rows"></div>
-          <button class="btn-checkout" id="btn-checkout" onclick="goToQuote()">📄 ดูใบเสนอราคา →</button>
+          <button class="btn-checkout" id="btn-checkout" onclick="goToQuote()">📄 ดูใบเสร็จ/ใบส่งของ →</button>
         </div>
       </div>
     </div>
@@ -623,7 +623,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
   <div class="page" id="page-quote">
     <div class="quote-container">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <h2 style="font-size:18px">📄 ใบเสนอราคา</h2>
+        <h2 style="font-size:18px">📄 ใบเสร็จรับเงิน/ใบส่งของ</h2>
         <button class="btn-back-quote btn-print" onclick="showPage('cart')" style="width:auto;padding:8px 16px">← กลับแก้ไข</button>
       </div>
       <div class="quote-header-box">
@@ -2497,12 +2497,29 @@ async function reprintFromHistory(saleId) {
       <input type="text" id="rp-item" placeholder="สินค้าที่ส่งซ่อม *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; grid-column: 1 / -1; box-sizing:border-box;">
       <textarea id="rp-accessories" placeholder="สิ่งที่นำมาด้วย (เช่น สายชาร์จ, กล่อง)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
       <textarea id="rp-symptom" placeholder="อาการเสีย *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
+
+      <div style="grid-column: 1 / -1; border:1px solid #333; border-radius:6px; padding:10px; background:#181818;">
+        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:6px;">🔩 เบิกอะไหล่จาก Stock (ถ้ามี — ตัดสต็อกจริง นับเป็นยอดขายด้วย)</label>
+        <div style="position:relative;">
+          <input type="text" id="rp-part-search" placeholder="พิมพ์ชื่ออะไหล่เพื่อค้นหา..." oninput="searchRepairProduct(this.value)" style="padding:8px 10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box; font-size:13px;">
+          <div id="rp-part-dropdown" style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:180px; overflow-y:auto; background:#2a2a2a; border:1px solid #444; border-radius:4px; z-index:1000; box-shadow: 0 4px 8px rgba(0,0,0,0.5);"></div>
+        </div>
+        <div id="rp-parts-list" style="margin-top:8px;"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:12px; color:#ccc;">
+          <span>ยอดอะไหล่รวม:</span><b id="rp-parts-total" style="color:#9333ea;">0.00 บาท</b>
+        </div>
+      </div>
+
       <div>
         <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ราคาประเมินแจ้งซ่อม (บาท):</label>
         <input type="number" id="rp-estimate" placeholder="0.00" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box;">
       </div>
       <div>
-        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ยอดชำระ (บาท):</label>
+        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ค่าแรง/บริการ (บาท):</label>
+        <input type="number" id="rp-labor" placeholder="0.00" oninput="updateRepairChargeTotal()" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box;">
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="font-size:11px; color:#aaa; display:block; margin-bottom:2px;">ยอดชำระ (บาท) — คำนวณจากอะไหล่+ค่าแรงให้อัตโนมัติ แก้ไขเองได้:</label>
         <input type="number" id="rp-paid" placeholder="0.00" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; width:100%; box-sizing:border-box;">
       </div>
       <textarea id="rp-address" placeholder="ที่อยู่ส่งกลับ (ถ้ามี)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:60px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
@@ -2740,6 +2757,7 @@ function closeClaimModal() { document.getElementById('claim-modal').style.displa
 function closeClaimHistory() { document.getElementById('claim-history-modal').style.display = 'none'; }
 
 let editingRepairId = null;
+let repairParts = [];
 function openRepairModal() {
   if(!checkAuthBefore('ทำรายการรับซ่อม')) return;
   const modal = document.getElementById('repair-modal');
@@ -2747,6 +2765,8 @@ function openRepairModal() {
     modal.style.display = 'flex';
     document.querySelectorAll('#repair-modal input, #repair-modal textarea').forEach(el => el.value = '');
     cancelEditRepair();
+    repairParts = [];
+    renderRepairPartsList();
   }
 }
 function closeRepairModal() { document.getElementById('repair-modal').style.display = 'none'; }
@@ -2757,6 +2777,73 @@ function cancelEditRepair() {
   document.getElementById('rp-save-btn').textContent = '💾 บันทึก & พิมพ์ใบรับซ่อม';
   document.getElementById('rp-find-results').style.display = 'none';
   document.getElementById('rp-find-input').value = '';
+}
+
+// ===== เบิกอะไหล่จาก Stock ในบิลซ่อม (ตัดสต็อกจริง ผูกกับระบบขายเดิม) =====
+function searchRepairProduct(kw) {
+  const dropdown = document.getElementById('rp-part-dropdown');
+  if (!kw.trim() || typeof PRODUCTS === 'undefined' || !Array.isArray(PRODUCTS) || PRODUCTS.length === 0) {
+    dropdown.style.display = 'none';
+    return;
+  }
+  const filtered = PRODUCTS.filter(p => (p.name || '').toLowerCase().includes(kw.toLowerCase())).slice(0, 15);
+  if (filtered.length === 0) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = filtered.map(p => `
+    <div onclick='addRepairPart(${JSON.stringify(p.id)})' style="padding:8px 10px; border-bottom:1px solid #444; cursor:pointer; font-size:12px; color:#fff;" onmouseover="this.style.background='#444'" onmouseout="this.style.background='transparent'">
+      📦 ${p.name} <span style="color:#999">— คงเหลือ ${p.stock ?? '-'} · ${fmt(p.priceRetail)}</span>
+    </div>
+  `).join('');
+  dropdown.style.display = 'block';
+}
+
+function addRepairPart(productId) {
+  const p = PRODUCTS.find(x => String(x.id) === String(productId));
+  if (!p) return;
+  const existing = repairParts.find(x => String(x.id) === String(productId));
+  if (existing) existing.qty += 1;
+  else repairParts.push({ id: p.id, name: p.name, price: p.priceRetail, qty: 1 });
+  document.getElementById('rp-part-search').value = '';
+  document.getElementById('rp-part-dropdown').style.display = 'none';
+  renderRepairPartsList();
+}
+
+function changeRepairPartQty(productId, delta) {
+  const item = repairParts.find(x => String(x.id) === String(productId));
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) repairParts = repairParts.filter(x => String(x.id) !== String(productId));
+  renderRepairPartsList();
+}
+
+function renderRepairPartsList() {
+  const listEl = document.getElementById('rp-parts-list');
+  const totalEl = document.getElementById('rp-parts-total');
+  if (!listEl) return;
+  if (repairParts.length === 0) {
+    listEl.innerHTML = '<div style="font-size:12px;color:#666;padding:4px 0;">ยังไม่ได้เบิกอะไหล่</div>';
+  } else {
+    listEl.innerHTML = repairParts.map(item => `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid #2a2a2a; font-size:12px;">
+        <span style="flex:1;color:#fff;">${item.name}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="changeRepairPartQty('${item.id}', -1)" style="width:22px;height:22px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;cursor:pointer;">−</button>
+          <span style="min-width:18px;text-align:center;color:#fff;">${item.qty}</span>
+          <button onclick="changeRepairPartQty('${item.id}', 1)" style="width:22px;height:22px;background:#333;border:1px solid #555;color:#fff;border-radius:4px;cursor:pointer;">+</button>
+          <span style="min-width:70px;text-align:right;color:#9333ea;">${fmt(item.price * item.qty)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  const total = repairParts.reduce((s, i) => s + i.price * i.qty, 0);
+  totalEl.textContent = total.toLocaleString('th-TH', {minimumFractionDigits:2}) + ' บาท';
+  updateRepairChargeTotal();
+}
+
+function updateRepairChargeTotal() {
+  const partsTotal = repairParts.reduce((s, i) => s + i.price * i.qty, 0);
+  const labor = Number(document.getElementById('rp-labor')?.value) || 0;
+  const paidEl = document.getElementById('rp-paid');
+  if (paidEl) paidEl.value = (partsTotal + labor) || '';
 }
 
 async function searchRepairHistory() {
@@ -2811,6 +2898,9 @@ function loadRepairForEdit(r) {
   document.getElementById('rp-paid').value = r.paid || '';
   document.getElementById('rp-address').value = r.address || '';
   document.getElementById('rp-remark').value = r.remark || '';
+  document.getElementById('rp-labor').value = '';
+  repairParts = [];
+  renderRepairPartsList();
 
   editingRepairId = r.id;
   document.getElementById('rp-edit-id').textContent = r.id || '-';
@@ -3075,6 +3165,54 @@ function renderRepairReceipt(repairId, printDate, f, mode) {
   table.appendChild(tbody);
   printDiv.appendChild(table);
 
+  // 🔩 ตารางแยกรายการอะไหล่ที่ใช้ (ถ้ามี) — รูปแบบเดียวกับใบเสร็จขาย
+  if (Array.isArray(f.parts) && f.parts.length > 0) {
+    const partsTitle = document.createElement('div');
+    partsTitle.style.cssText = 'font-weight:700;font-size:13px;margin:10px 0 6px;color:#000';
+    partsTitle.textContent = '🔩 รายการอะไหล่ที่ใช้';
+    printDiv.appendChild(partsTitle);
+
+    const partsTable = document.createElement('table');
+    partsTable.className = 'quote-table';
+    const pThead = document.createElement('thead');
+    pThead.innerHTML = '<tr><th style="text-align:left;color:#000">สินค้า</th><th style="text-align:right;color:#000">ราคา/ชิ้น</th><th style="text-align:center;color:#000">จำนวน</th><th style="text-align:right;color:#000">รวม</th></tr>';
+    partsTable.appendChild(pThead);
+
+    const pTbody = document.createElement('tbody');
+    let partsTotal = 0;
+    f.parts.forEach(p => {
+      const lineTotal = (Number(p.price) || 0) * (Number(p.qty) || 0);
+      partsTotal += lineTotal;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:#000">${p.name || '-'}</td>
+        <td style="text-align:right;color:#000">${(Number(p.price)||0).toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
+        <td style="text-align:center;color:#000">${p.qty || 0}</td>
+        <td style="text-align:right;color:#000">${lineTotal.toLocaleString('th-TH',{minimumFractionDigits:2})}</td>`;
+      pTbody.appendChild(tr);
+    });
+
+    const labor = Number(f.labor) || 0;
+    if (labor > 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:#000">ค่าแรง/บริการ</td>
+        <td style="text-align:right;color:#000">-</td>
+        <td style="text-align:center;color:#000">-</td>
+        <td style="text-align:right;color:#000">${labor.toLocaleString('th-TH',{minimumFractionDigits:2})}</td>`;
+      pTbody.appendChild(tr);
+    }
+
+    const trTotal = document.createElement('tr');
+    trTotal.innerHTML = `
+      <td colspan="3" style="text-align:right;font-weight:700;color:#000;border-top:1px solid #000">รวมทั้งหมด</td>
+      <td style="text-align:right;font-weight:700;color:#000;border-top:1px solid #000">${(partsTotal + labor).toLocaleString('th-TH',{minimumFractionDigits:2})}</td>`;
+    pTbody.appendChild(trTotal);
+
+    partsTable.appendChild(pTbody);
+    printDiv.appendChild(partsTable);
+  }
+
   const disclaimer = document.createElement('div');
   disclaimer.style.cssText = 'margin-top:10px;padding:8px;border:1px dashed #000;font-size:10px;line-height:1.5;color:#000;text-align:center';
   disclaimer.innerHTML = '<b>เงื่อนไขการบริการ:</b> ลูกค้าต้องสำรองข้อมูลด้วยตนเอง ทางร้านจะไม่รับผิดชอบต่อการสูญหายหรือเสียหายของข้อมูลบนฮาร์ดดิสก์/อุปกรณ์จัดเก็บทุกชนิด เว้นแต่ได้แจ้งและตกลงเป็นลายลักษณ์อักษรกับเจ้าหน้าที่ล่วงหน้า';
@@ -3129,7 +3267,7 @@ function renderRepairReceipt(repairId, printDate, f, mode) {
   }, 500);
 }
 
-function processRepair() {
+async function processRepair() {
   const cust = document.getElementById('rp-cust').value.trim();
   const phone = document.getElementById('rp-phone').value.trim();
   const item = document.getElementById('rp-item').value.trim();
@@ -3141,9 +3279,41 @@ function processRepair() {
   }
 
   const isEdit = !!editingRepairId;
+  const repairId = isEdit ? editingRepairId : ('RPR' + Date.now().toString().substring(5));
+  const sellerName = (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน';
+  let remark = document.getElementById('rp-remark').value.trim();
+  let partsSaleId = '';
+
+  // 🔩 ถ้ามีการเบิกอะไหล่จาก stock -> ตัดสต็อกจริงผ่านระบบขายเดิม (บันทึกเป็นยอดขาย + คืนสต็อกได้ผ่านปุ่มยกเลิกบิลในรายงาน)
+  if (repairParts.length > 0) {
+    if (typeof showToast === 'function') showToast('⏳ กำลังตัดสต็อกอะไหล่...', 'info');
+    const partsTotal = repairParts.reduce((s, i) => s + i.price * i.qty, 0);
+    partsSaleId = Date.now();
+    const partsSale = {
+      id: partsSaleId,
+      time: new Date().toLocaleString('sv-SE', {timeZone:'Asia/Bangkok'}).replace(' ','T'),
+      seller: (typeof currentUser !== 'undefined' && currentUser?.username) ? currentUser.username : '',
+      sellerName: sellerName,
+      customer: cust,
+      phone: phone,
+      note: `อะไหล่งานซ่อม #${repairId}`,
+      items: repairParts.map(p => ({ id: p.id, name: p.name, price: p.price, qty: p.qty })),
+      total: partsTotal
+    };
+    try {
+      const saleEncoded = encodeURIComponent(JSON.stringify(partsSale));
+      const saleRes = await fetch(API_URL + '?action=addSale&data=' + saleEncoded);
+      const saleResult = await saleRes.json();
+      if (!saleResult.ok) throw new Error(saleResult.error || 'บันทึกอะไหล่ไม่สำเร็จ');
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('⚠️ ตัดสต็อกอะไหล่ไม่สำเร็จ: ' + e.message + ' (จะบันทึกใบซ่อมต่อโดยไม่ตัดสต็อก)', 'error');
+      partsSaleId = '';
+    }
+    remark = (remark ? remark + ' | ' : '') + (partsSaleId ? `อ้างอิงบิลขายอะไหล่ #${partsSaleId}` : 'ตัดสต็อกอะไหล่ไม่สำเร็จ (ดูรายการในตารางท้ายบิล)');
+  }
+
   if (typeof showToast === 'function') showToast(isEdit ? '⏳ กำลังอัปเดตบิลซ่อม...' : '⏳ กำลังบันทึกข้อมูลและสร้างใบรับซ่อม...', 'info');
 
-  const repairId = isEdit ? editingRepairId : ('RPR' + Date.now().toString().substring(5));
   const repairData = {
     action: isEdit ? "updateRepair" : "saveRepair",
     id: repairId, date: new Date().toISOString(),
@@ -3152,8 +3322,8 @@ function processRepair() {
     estimate: document.getElementById('rp-estimate').value.trim(),
     paid: document.getElementById('rp-paid').value.trim(),
     address: document.getElementById('rp-address').value.trim(),
-    remark: document.getElementById('rp-remark').value.trim(),
-    seller: (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน'
+    remark: remark,
+    seller: sellerName
   };
 
   // 💾 บันทึกลงเครื่อง (ประวัติ)
@@ -3175,6 +3345,9 @@ function processRepair() {
 
   closeRepairModal();
   cancelEditRepair();
+  const partsForReceipt = repairParts.slice();
+  const laborForReceipt = document.getElementById('rp-labor')?.value || 0;
+  repairParts = [];
 
   const d = new Date();
   const printDate = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${(d.getFullYear()+543)} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
@@ -3182,13 +3355,15 @@ function processRepair() {
   renderRepairReceipt(repairId, printDate, {
     cust: cust, phone: phone, item: item, acc: repairData.acc, symptom: symptom,
     estimate: repairData.estimate, paid: repairData.paid,
-    address: repairData.address, remark: repairData.remark, seller: repairData.seller
+    address: repairData.address, remark: repairData.remark, seller: repairData.seller,
+    parts: partsForReceipt, labor: laborForReceipt
   }, repairPrintMode);
 
   setTimeout(() => {
-    ['rp-cust', 'rp-phone', 'rp-item', 'rp-accessories', 'rp-symptom', 'rp-estimate', 'rp-paid', 'rp-address', 'rp-remark'].forEach(id => {
+    ['rp-cust', 'rp-phone', 'rp-item', 'rp-accessories', 'rp-symptom', 'rp-estimate', 'rp-labor', 'rp-paid', 'rp-address', 'rp-remark'].forEach(id => {
       if (document.getElementById(id)) document.getElementById(id).value = '';
     });
+    renderRepairPartsList();
   }, 500);
 }
 
