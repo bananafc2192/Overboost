@@ -3958,7 +3958,7 @@ function processDeposit() {
 
     fetch(url, {
         method: 'POST',
-        body: JSON.stringify({ action: 'saveDeposit', data: depositData })
+        body: JSON.stringify({ action: 'saveDeposit', ...depositData })
     }).catch(err => console.error('Error saving deposit:', err));
 
     renderDepositReceipt(depositId, printDate, {
