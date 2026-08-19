@@ -599,10 +599,6 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
   <!-- CART -->
   <div class="page" id="page-cart">
     <h2 style="margin-bottom:16px;font-size:18px">🛒 ตะกร้าสินค้า</h2>
-    <div id="deposit-link-banner" style="display:none; background:rgba(234,179,8,0.12); border:1px solid var(--amber); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:var(--amber);">
-      🔖 บิลนี้เชื่อมกับมัดจำ #<span id="deposit-link-id"></span> — จ่ายมัดจำไว้แล้ว <b id="deposit-link-amt"></b> บาท (จะหักออกจากยอดที่ต้องชำระอัตโนมัติ)
-      <button onclick="cancelPendingDeposit()" style="float:right; background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:4px; padding:2px 10px; cursor:pointer; font-size:12px;">ยกเลิกการเชื่อม</button>
-    </div>
     <div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
       <div id="cart-items-list"></div>
       <div>
@@ -626,9 +622,6 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
   <!-- QUOTATION -->
   <div class="page" id="page-quote">
     <div class="quote-container">
-      <div id="deposit-link-banner-quote" class="no-print" style="display:none; background:rgba(234,179,8,0.12); border:1px solid var(--amber); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:var(--amber);">
-        🔖 บิลนี้จะหักยอดมัดจำที่จ่ายไว้แล้วออกให้อัตโนมัติตอนกดบันทึกการขาย (ไม่ปรากฏในเอกสารพิมพ์จริง)
-      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <h2 style="font-size:18px">📄 ใบเสร็จรับเงิน/ใบส่งของ</h2>
         <button class="btn-back-quote btn-print" onclick="showPage('cart')" style="width:auto;padding:8px 16px">← กลับแก้ไข</button>
@@ -782,7 +775,6 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
       <button onclick="setReportView('sales')" id="rpt-tab-sales" class="rpt-tab active" style="padding:8px 16px;background:var(--red);border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:13px;font-weight:600">💰 ยอดขาย</button>
       <button onclick="setReportView('claims')" id="rpt-tab-claims" class="rpt-tab" style="padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;font-weight:600">🛠️ การเคลม</button>
       <button onclick="setReportView('repairs')" id="rpt-tab-repairs" class="rpt-tab" style="padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;font-weight:600">🔧 การซ่อม</button>
-      <button onclick="setReportView('deposits')" id="rpt-tab-deposits" class="rpt-tab" style="padding:8px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;font-size:13px;font-weight:600">💰 มัดจำ</button>
     </div>
     <div class="stats-grid" id="stats-grid"></div>
     <div class="sales-table-wrap">
@@ -1418,7 +1410,6 @@ function renderCart() {
     list.innerHTML = '<div class="cart-empty">🛒<br><br>ตะกร้าว่างเปล่า<br><br><button class="btn-print" onclick="showPage(\'products\')" style="width:auto;padding:8px 20px">เลือกสินค้า</button></div>';
     document.getElementById('cart-summary-rows').innerHTML = '';
     document.getElementById('btn-checkout').disabled = true;
-    updateDepositLinkBanners();
     return;
   }
   list.innerHTML = cart.map((item, idx) => {
@@ -1443,22 +1434,17 @@ function renderCart() {
 
   const grand = cart.reduce((s, c) => s + c.price * c.qty, 0);
   const items = cart.reduce((s, c) => s + c.qty, 0);
-  const depositDeduct = getDepositDeductionAmount();
-  const finalAmt = Math.max(0, grand - (discountApproved ? discountAmount : 0) - depositDeduct);
+  const finalAmt = grand - (discountApproved ? discountAmount : 0);
   const discRow = discountApproved && discountAmount > 0 ?
     `<div class="cart-summary-row" style="color:var(--amber)"><span>ส่วนลด</span><span>-${fmt(discountAmount)}</span></div>` : '';
-  const depositRow = depositDeduct > 0 ?
-    `<div class="cart-summary-row" style="color:var(--amber)"><span>หักมัดจำ #${pendingDeposit.id}</span><span>-${fmt(depositDeduct)}</span></div>` : '';
   document.getElementById('cart-summary-rows').innerHTML = `
     <div class="cart-summary-row"><span>รายการทั้งหมด</span><span>${cart.length} รายการ (${items} ชิ้น)</span></div>
     ${discRow}
-    ${depositRow}
     <div class="cart-summary-row" style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px">
       <span style="font-weight:600">ยอดรวม</span>
       <span class="cart-grand">${fmt(finalAmt)}</span>
     </div>`;
   document.getElementById('btn-checkout').disabled = false;
-  updateDepositLinkBanners();
 }
 
 function changeQty(idx, delta) {
@@ -1475,48 +1461,6 @@ function removeItem(idx) {
 }
 
 let isReprintMode = false;
-let pendingDeposit = null;
-
-function getDepositDeductionAmount() {
-  return pendingDeposit ? (Number(pendingDeposit.deposit) || 0) : 0;
-}
-
-function updateDepositLinkBanners() {
-  const cartBanner = document.getElementById('deposit-link-banner');
-  const quoteBanner = document.getElementById('deposit-link-banner-quote');
-  if (pendingDeposit) {
-    if (cartBanner) {
-      document.getElementById('deposit-link-id').textContent = pendingDeposit.id || '-';
-      document.getElementById('deposit-link-amt').textContent = fmt(getDepositDeductionAmount()).replace('฿','');
-      cartBanner.style.display = 'block';
-    }
-    if (quoteBanner) quoteBanner.style.display = 'block';
-  } else {
-    if (cartBanner) cartBanner.style.display = 'none';
-    if (quoteBanner) quoteBanner.style.display = 'none';
-  }
-}
-
-function cancelPendingDeposit() {
-  pendingDeposit = null;
-  updateDepositLinkBanners();
-  renderCart();
-  if (typeof showToast === 'function') showToast('ยกเลิกการเชื่อมบิลมัดจำแล้ว', 'info');
-}
-
-function completeDeposit(dep) {
-  if (dep.status === 'รับของแล้ว') return;
-  if (!confirm(`ดึงบิลมัดจำของ "${dep.cust}" ไปตัดขายเลยใช่มั้ยครับ?\n\nระบบจะหักยอดมัดจำที่จ่ายไว้แล้ว ${fmt(Number(dep.deposit)||0)} ออกจากยอดที่ต้องชำระในบิลขายจริงให้อัตโนมัติ\n\nขั้นตอนถัดไป: เลือกสินค้าตามรายการ "${dep.items || '-'}" ใส่ตะกร้าให้ครบ แล้วกดพิมพ์ & บันทึกการขายตามปกติ`)) return;
-
-  pendingDeposit = dep;
-  document.getElementById('cust-name').value = dep.cust || '';
-  document.getElementById('cust-phone').value = dep.phone || '';
-  document.getElementById('cust-note').value = `รับของตามบิลมัดจำ #${dep.id} — รายการ: ${dep.items || '-'}`;
-  updateDepositLinkBanners();
-  showPage('products');
-  if (typeof showToast === 'function') showToast(`📋 เชื่อมบิลมัดจำ #${dep.id} แล้ว — เลือกสินค้าตามรายการแล้วกดบันทึกการขายได้เลย`, 'info');
-}
-
 function updateQuoteActionButton() {
   const btn = document.getElementById('btn-sale-action');
   if (!btn) return;
@@ -1545,8 +1489,7 @@ function goToQuote() {
 
   const subTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
   const discountVal = discountApproved ? discountAmount : 0;
-  const depositDeduct = getDepositDeductionAmount();
-  const grand = Math.max(0, subTotal - discountVal - depositDeduct);
+  const grand = subTotal - discountVal;
   
   let htmlBody = cart.map(item => {
     const isFree = item.priceType === 'free';
@@ -1568,18 +1511,10 @@ function goToQuote() {
       <td style="text-align:right; color:var(--amber); font-weight:600;">-${fmt(discountVal)}</td>
     </tr>`;
   }
-  if (depositDeduct > 0) {
-    htmlBody += `
-    <tr style="border-top: 1px dashed var(--border);">
-      <td colspan="4" style="text-align:right; color:var(--amber); font-weight:600;">หักมัดจำที่ชำระแล้ว (#${pendingDeposit.id}):</td>
-      <td style="text-align:right; color:var(--amber); font-weight:600;">-${fmt(depositDeduct)}</td>
-    </tr>`;
-  }
 
   document.getElementById('quote-body').innerHTML = htmlBody;
   document.getElementById('quote-grand').textContent = fmt(grand);
   updateQuoteActionButton();
-  updateDepositLinkBanners();
   showPage('quote');
 }
 
@@ -1587,9 +1522,7 @@ async function confirmSale() {
   const custName = document.getElementById('q-cust').textContent;
   const subTotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
   const discountVal = discountApproved ? discountAmount : 0;
-  const depositDeduct = getDepositDeductionAmount();
-  const finalGrand = Math.max(0, subTotal - discountVal - depositDeduct); // --- หักทั้งส่วนลดและมัดจำที่จ่ายไว้แล้วก่อนบันทึกยอดขาย ---
-  const linkedDepositId = pendingDeposit ? pendingDeposit.id : '';
+  const finalGrand = subTotal - discountVal; // --- จุดที่แก้ไข: หักส่วนลดก่อนบันทึกยอดขาย ---
 
   const sale = {
     id: Date.now(),
@@ -1600,7 +1533,7 @@ async function confirmSale() {
     phone: document.getElementById('q-phone').textContent,
     note: document.getElementById('q-note').value,
     items: JSON.parse(JSON.stringify(cart)),
-    total: finalGrand,     // บันทึกยอดที่หักส่วนลด+มัดจำแล้วให้ถูกต้อง
+    total: finalGrand,     // บันทึกยอดที่หักส่วนลดแล้วให้ถูกต้อง
     discount: discountVal  // เก็บประวัติไว้ด้วยว่าบิลนี้ลดไปเท่าไหร่
   };
   
@@ -1619,16 +1552,6 @@ async function confirmSale() {
     sales.push(sale);
     localStorage.setItem('ovb_sales', JSON.stringify(sales));
     showToast('✅ บันทึกแบบ offline สำเร็จ กำลังพิมพ์...', 'success');
-  }
-
-  // 🔖 ถ้าบิลนี้เชื่อมกับมัดจำ -> อัปเดตสถานะมัดจำเป็น "รับของแล้ว" พร้อมอ้างอิงบิลขายที่ตัดจริง
-  if (linkedDepositId) {
-    fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'completeDeposit', id: linkedDepositId, linkedSaleId: sale.id })
-    }).catch(err => console.error('Error completing deposit:', err));
-    pendingDeposit = null;
-    updateDepositLinkBanners();
   }
 
   // 🖨️ พิมพ์ทันทีหลังบันทึกสำเร็จ (รวมสองปุ่มเป็นปุ่มเดียว ไม่ต้องกดซ้ำซ้อน)
@@ -1656,14 +1579,14 @@ function getSales() {
 let reportViewMode = 'sales';
 function setReportView(mode) {
   reportViewMode = mode;
-  ['sales','claims','repairs','deposits'].forEach(m => {
+  ['sales','claims','repairs'].forEach(m => {
     const tab = document.getElementById('rpt-tab-' + m);
     if (!tab) return;
     tab.style.background = (m === mode) ? 'var(--red)' : 'var(--bg2)';
     tab.style.border = (m === mode) ? 'none' : '1px solid var(--border)';
     tab.style.color = (m === mode) ? '#fff' : 'var(--text)';
   });
-  const titles = { sales: '📊 รายงานการขาย', claims: '🛠️ รายงานการเคลม', repairs: '🔧 รายงานการซ่อม', deposits: '💰 รายงานมัดจำ' };
+  const titles = { sales: '📊 รายงานการขาย', claims: '🛠️ รายงานการเคลม', repairs: '🔧 รายงานการซ่อม' };
   document.getElementById('rpt-title').textContent = titles[mode];
   renderReport();
 }
@@ -1672,7 +1595,6 @@ async function renderReport() {
   if (currentUser?.role !== 'admin') return;
   if (reportViewMode === 'claims') return renderClaimsReport();
   if (reportViewMode === 'repairs') return renderRepairsReport();
-  if (reportViewMode === 'deposits') return renderDepositsReport();
 
   const dateInput = document.getElementById('rpt-date')?.value || "";
   const monthInput = document.getElementById('rpt-month')?.value || "";
@@ -2090,64 +2012,11 @@ async function renderRepairsReport() {
   }).join('');
 }
 
-async function renderDepositsReport() {
-  document.getElementById('report-thead-row').innerHTML =
-    '<th>วันที่</th><th>พนักงาน</th><th>ลูกค้า</th><th>รายการ/สถานะ</th><th>มัดจำ/คงเหลือ</th><th></th><th></th>';
-  document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
-
-  let deposits = [];
-  try {
-    const res = await fetch(API_URL + '?action=getDeposits');
-    const data = await res.json();
-    deposits = data.deposits || [];
-  } catch(e) {
-    deposits = [];
-  }
-
-  const filtered = applyReportFilters(deposits, 'date');
-  window._lastDeposits = filtered;
-
-  const totalDeposit = filtered.reduce((s, d) => s + (Number(d.deposit) || 0), 0);
-  const totalBalance = filtered.reduce((s, d) => s + (Number(d.balance) || 0), 0);
-  document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-card"><div class="stat-label">จำนวนบิลมัดจำ</div><div class="stat-val red">${filtered.length}</div></div>
-    <div class="stat-card"><div class="stat-label">ยอดมัดจำรวม</div><div class="stat-val">${fmt(totalDeposit)}</div></div>
-    <div class="stat-card"><div class="stat-label">ยอดคงเหลือรวม (ยังไม่รับ)</div><div class="stat-val" style="color:var(--amber)">${fmt(totalBalance)}</div></div>
-    <div class="stat-card"><div class="stat-label">พนักงานที่รับมัดจำ</div><div class="stat-val green">${[...new Set(filtered.map(d=>d.seller).filter(Boolean))].length}</div></div>`;
-
-  if (filtered.length === 0) {
-    document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">ไม่มีข้อมูล</td></tr>';
-    return;
-  }
-
-  document.getElementById('report-body').innerHTML = filtered.map(dep => {
-    const d = parseFlexDate(dep.date);
-    const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
-    const isPaid = dep.status === 'รับของแล้ว';
-    const statusBadge = isPaid
-      ? `<span style="padding:3px 8px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:5px;color:#22c55e;font-size:11px">✅ รับของแล้ว</span>`
-      : `<span style="padding:3px 8px;background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:5px;color:#eab308;font-size:11px">⏳ ค้างชำระ</span>`;
-    const actionCell = isPaid
-      ? ''
-      : `<button onclick='completeDeposit(${JSON.stringify(dep).replace(/'/g, "&#39;")})' style="padding:4px 10px;background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-size:11px;white-space:nowrap">✅ รับของแล้ว</button>`;
-    return `<tr>
-      <td style="white-space:nowrap">${t}</td>
-      <td><span class="seller-badge">${dep.seller || '-'}</span></td>
-      <td>${dep.cust || '-'}</td>
-      <td style="font-size:12px;color:var(--text2);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dep.items || '-'}<br>${statusBadge}</td>
-      <td style="font-size:12px">มัดจำ ${fmt(Number(dep.deposit)||0)} / เหลือ ${fmt(Number(dep.balance)||0)}</td>
-      <td></td>
-      <td>${actionCell}</td>
-    </tr>`;
-  }).join('');
-}
-
 async function exportClaimsOrRepairsReport(btn) {
   btn.textContent = '⏳ กำลังโหลด...';
   btn.disabled = true;
   const isClaims = reportViewMode === 'claims';
-  const isDeposits = reportViewMode === 'deposits';
-  const rows = isClaims ? (window._lastClaims || []) : isDeposits ? (window._lastDeposits || []) : (window._lastRepairs || []);
+  const rows = isClaims ? (window._lastClaims || []) : (window._lastRepairs || []);
 
   if (rows.length === 0) {
     showToast('ไม่มีข้อมูลให้ Export', 'error');
@@ -2159,9 +2028,6 @@ async function exportClaimsOrRepairsReport(btn) {
   const csvRows = isClaims
     ? [['รหัสเคลม','วันที่','ลูกค้า','เบอร์โทร','สินค้า','S/N','อาการเสีย','พนักงาน'],
        ...rows.map(c => [c.id, c.date, c.cust, c.phone, c.item, c.sn, c.symptom, c.seller])]
-    : isDeposits
-    ? [['รหัสบิล','วันที่','ลูกค้า','เบอร์โทร','รายการสินค้า','ยอดรวม','มัดจำแล้ว','คงเหลือ','พนักงาน','สถานะ'],
-       ...rows.map(d => [d.id, d.date, d.cust, d.phone, d.items, d.total, d.deposit, d.balance, d.seller, d.status])]
     : [['รหัสซ่อม','วันที่','ลูกค้า','เบอร์โทร','สินค้า','อาการเสีย','ประเมินราคา','ยอดชำระ','พนักงาน'],
        ...rows.map(r => [r.id, r.date, r.cust, r.phone, r.item, r.symptom, r.estimate, r.paid, r.seller])];
 
@@ -2171,7 +2037,7 @@ async function exportClaimsOrRepairsReport(btn) {
   const a = document.createElement('a');
   const today = new Date().toISOString().split('T')[0];
   a.href = url;
-  a.download = `overboost_${isClaims ? 'claims' : isDeposits ? 'deposits' : 'repairs'}_${today}.csv`;
+  a.download = `overboost_${isClaims ? 'claims' : 'repairs'}_${today}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 
