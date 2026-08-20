@@ -2422,7 +2422,7 @@ async function loadProductsFromSheet() {
     const data = await res.json();
     if (data.ok) {
       PRODUCTS = data.products;
-      renderProducts(); // แสดงรายการสินค้า
+      filterProducts(); // แสดงรายการสินค้า (ต้องเรียกตัวนี้ ไม่ใช่ renderProducts() ตรงๆ เพราะ renderProducts() ใช้ filteredProds ซึ่งต้องถูกสร้างใหม่จาก PRODUCTS ก่อนทุกครั้งที่โหลดข้อมูลใหม่ ไม่งั้นจะโชว์รายการเก่า/ว่างเปล่าค้างไว้)
     } else {
       prodGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--red);">❌ โหลดสินค้าไม่สำเร็จ: ${data.error}</div>`;
     }
