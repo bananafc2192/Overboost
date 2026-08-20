@@ -877,6 +877,7 @@ async function doLogin() {
     const data = await res.json();
     if (data.ok) {
       currentUser = data.user;
+      localStorage.setItem('ovb_session', JSON.stringify(currentUser)); // 🔐 จำสถานะล็อกอินไว้ ไม่ต้อง login ใหม่ทุกครั้งที่ refresh
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
       document.getElementById('app').style.flexDirection = 'column';
@@ -893,6 +894,7 @@ async function doLogin() {
     // Fallback to local users if API fails
     if (USERS[u] && USERS[u].pass === p) {
       currentUser = { username: u, ...USERS[u] };
+      localStorage.setItem('ovb_session', JSON.stringify(currentUser)); // 🔐 จำสถานะล็อกอินไว้ (โหมด offline fallback)
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
       document.getElementById('app').style.flexDirection = 'column';
@@ -916,12 +918,33 @@ function doLogout() {
   stopDiscPolling();
   if (adminPollTimer) { clearInterval(adminPollTimer); adminPollTimer = null; }
   currentUser = null; cart = [];
+  localStorage.removeItem('ovb_session'); // 🔐 ล้างสถานะล็อกอินตอนออกจากระบบจริงๆ
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('l-user').value = '';
   document.getElementById('l-pass').value = '';
   document.getElementById('l-err').style.display = 'none';
 }
+
+// 🔐 คืนสถานะล็อกอินไว้เมื่อ refresh หน้า (จนกว่าจะกด "ออก" จริงๆ)
+(function restoreSession() {
+  try {
+    const saved = localStorage.getItem('ovb_session');
+    if (!saved) return;
+    const user = JSON.parse(saved);
+    if (!user || !user.username) return;
+    currentUser = user;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+    document.getElementById('user-name-display').textContent = currentUser.name;
+    if (currentUser.role === 'admin') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+      document.getElementById('tab-report').style.display = 'inline-block';
+    }
+    initApp();
+  } catch(e) { /* ถ้า parse ไม่ได้ ปล่อยให้เข้าหน้า login ตามปกติ */ }
+})();
 
 function initApp() {
   const catSel = document.getElementById('cat-filter');
@@ -1506,15 +1529,68 @@ function cancelPendingDeposit() {
 
 function completeDeposit(dep) {
   if (dep.status === 'รับของแล้ว') return;
-  if (!confirm(`ดึงบิลมัดจำของ "${dep.cust}" ไปตัดขายเลยใช่มั้ยครับ?\n\nระบบจะหักยอดมัดจำที่จ่ายไว้แล้ว ${fmt(Number(dep.deposit)||0)} ออกจากยอดที่ต้องชำระในบิลขายจริงให้อัตโนมัติ\n\nขั้นตอนถัดไป: เลือกสินค้าตามรายการ "${dep.items || '-'}" ใส่ตะกร้าให้ครบ แล้วกดพิมพ์ & บันทึกการขายตามปกติ`)) return;
+
+  let restoredItems = [];
+  try { restoredItems = JSON.parse(dep.itemsJson || '[]'); } catch(e) { restoredItems = []; }
+  const hasStructuredItems = Array.isArray(restoredItems) && restoredItems.length > 0;
+
+  const confirmMsg = hasStructuredItems
+    ? `ดึงบิลมัดจำของ "${dep.cust}" มาตัดขายเลยใช่มั้ยครับ?\n\nระบบจะดึงรายการสินค้าเดิม (${restoredItems.map(i=>i.name+' x'+i.qty).join(', ')}) เข้าตะกร้าให้อัตโนมัติ และหักยอดมัดจำ ${fmt(Number(dep.deposit)||0)} ออกจากยอดที่ต้องชำระให้`
+    : `ดึงบิลมัดจำของ "${dep.cust}" ไปตัดขายเลยใช่มั้ยครับ?\n\n⚠️ บิลนี้บันทึกไว้ก่อนอัปเดตระบบ ไม่มีข้อมูลสินค้าแบบละเอียด กรุณาเลือกสินค้าเองตามรายการ: "${dep.items || '-'}"\n\nระบบจะหักยอดมัดจำ ${fmt(Number(dep.deposit)||0)} ออกจากยอดที่ต้องชำระให้อัตโนมัติ`;
+  if (!confirm(confirmMsg)) return;
+
+  if (cart && cart.length > 0 && !confirm('ตะกร้าปัจจุบันมีสินค้าอยู่ ต้องการล้างตะกร้าแล้วดึงรายการมัดจำนี้มาแทนหรือไม่?')) return;
 
   pendingDeposit = dep;
+  cart = hasStructuredItems ? restoredItems : [];
+  updateCartBadge();
   document.getElementById('cust-name').value = dep.cust || '';
   document.getElementById('cust-phone').value = dep.phone || '';
-  document.getElementById('cust-note').value = `รับของตามบิลมัดจำ #${dep.id} — รายการ: ${dep.items || '-'}`;
+  document.getElementById('cust-note').value = `รับของตามบิลมัดจำ #${dep.id}`;
   updateDepositLinkBanners();
-  showPage('products');
-  if (typeof showToast === 'function') showToast(`📋 เชื่อมบิลมัดจำ #${dep.id} แล้ว — เลือกสินค้าตามรายการแล้วกดบันทึกการขายได้เลย`, 'info');
+  renderCart();
+  showPage('cart');
+  if (typeof showToast === 'function') showToast(`📋 เชื่อมบิลมัดจำ #${dep.id} แล้ว — ${hasStructuredItems ? 'ดึงรายการสินค้าเข้าตะกร้าให้แล้ว ตรวจสอบแล้วกดบันทึกการขายได้เลย' : 'กรุณาเลือกสินค้าตามรายการแล้วกดบันทึกการขาย'}`, 'info');
+}
+
+function editDeposit(dep) {
+  if (dep.status === 'รับของแล้ว' || dep.status === 'ยกเลิก') return;
+
+  let restoredItems = [];
+  try { restoredItems = JSON.parse(dep.itemsJson || '[]'); } catch(e) { restoredItems = []; }
+
+  if (cart && cart.length > 0 && !confirm('ตะกร้าปัจจุบันมีสินค้าอยู่ ต้องการล้างตะกร้าแล้วโหลดรายการของบิลมัดจำนี้มาแก้ไขหรือไม่?')) return;
+
+  cart = Array.isArray(restoredItems) ? restoredItems : [];
+  updateCartBadge();
+  editingDepositId = dep.id;
+  document.getElementById('dep-edit-id').textContent = dep.id;
+  document.getElementById('dep-edit-banner').style.display = 'block';
+  document.getElementById('dep-save-btn').textContent = '💾 บันทึกการแก้ไข & พิมพ์ใบมัดจำ';
+  document.getElementById('dep-cust').value = dep.cust || '';
+  document.getElementById('dep-phone').value = dep.phone || '';
+  document.getElementById('dep-amount').value = dep.deposit || '';
+  renderDepositCartSummary();
+  document.getElementById('deposit-modal').style.display = 'flex';
+  if (typeof showToast === 'function') showToast(`✏️ กำลังแก้ไขบิลมัดจำ #${dep.id} — ปรับสินค้าในตะกร้าได้ถ้าต้องการ`, 'info');
+}
+
+async function cancelDepositBill(dep) {
+  if (dep.status === 'รับของแล้ว') { alert('บิลนี้รับของไปแล้ว ยกเลิกไม่ได้ครับ'); return; }
+  if (!confirm(`ยืนยันยกเลิกบิลมัดจำของ "${dep.cust}" ใช่หรือไม่? (แก้ไขย้อนกลับไม่ได้)`)) return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'cancelDeposit', id: dep.id })
+    });
+    const result = await res.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Cancel failed');
+    if (typeof showToast === 'function') showToast('✅ ยกเลิกบิลมัดจำเรียบร้อยแล้ว', 'success');
+  } catch(e) {
+    if (typeof showToast === 'function') showToast('❌ ยกเลิกไม่สำเร็จ: ' + e.message, 'error');
+    return;
+  }
+  renderDepositsReport();
 }
 
 function updateQuoteActionButton() {
@@ -1668,12 +1744,14 @@ function setReportView(mode) {
   renderReport();
 }
 
+let reportRequestToken = 0;
 async function renderReport() {
   if (currentUser?.role !== 'admin') return;
   if (reportViewMode === 'claims') return renderClaimsReport();
   if (reportViewMode === 'repairs') return renderRepairsReport();
   if (reportViewMode === 'deposits') return renderDepositsReport();
 
+  const myToken = ++reportRequestToken;
   const dateInput = document.getElementById('rpt-date')?.value || "";
   const monthInput = document.getElementById('rpt-month')?.value || "";
   const sellerFilter = document.getElementById('rpt-seller')?.value || "";
@@ -1691,6 +1769,7 @@ async function renderReport() {
   } catch(e) {
     allSales = getSales() || [];
   }
+  if (myToken !== reportRequestToken || reportViewMode !== 'sales') return; // มีการสลับแท็บไปแล้วระหว่างรอโหลด ยกเลิกการเขียนทับ
 
   // อัพเดต seller filter จากข้อมูลชุดเดียวกัน
   const _sellers = [...new Set(allSales.map(s => s.seller).filter(Boolean))];
@@ -2004,6 +2083,7 @@ function applyReportFilters(rows, dateField) {
 }
 
 async function renderClaimsReport() {
+  const myToken = ++reportRequestToken;
   document.getElementById('report-thead-row').innerHTML =
     '<th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th><th>สินค้า/อาการเสีย</th><th>S/N</th><th></th><th></th>';
   document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
@@ -2016,6 +2096,7 @@ async function renderClaimsReport() {
   } catch(e) {
     try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e2) {}
   }
+  if (myToken !== reportRequestToken || reportViewMode !== 'claims') return;
 
   const filtered = applyReportFilters(claims, 'date');
   window._lastClaims = filtered;
@@ -2034,19 +2115,27 @@ async function renderClaimsReport() {
   document.getElementById('report-body').innerHTML = filtered.map(c => {
     const d = parseFlexDate(c.date);
     const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
+    const isDone = c.status === 'จบงานแล้ว';
+    const statusBadge = isDone
+      ? `<span style="padding:2px 7px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:5px;color:#22c55e;font-size:10px;white-space:nowrap">✅ จบงานแล้ว</span>`
+      : `<span style="padding:2px 7px;background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:5px;color:#eab308;font-size:10px;white-space:nowrap">⏳ ดำเนินการ</span>`;
     return `<tr>
       <td style="white-space:nowrap">${t}</td>
       <td><span class="seller-badge">${c.seller || '-'}</span></td>
       <td>${c.cust || '-'}</td>
       <td style="font-size:12px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.item || '-'} — ${c.symptom || '-'}</td>
       <td style="font-size:12px">${c.sn || '-'}</td>
-      <td></td>
-      <td><button onclick="reprintClaim('${c.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px">🖨️ พิมพ์</button></td>
+      <td>${statusBadge}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button onclick="reprintClaim('${c.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px">🖨️ พิมพ์</button>
+        ${!isDone ? `<button onclick="completeClaimJob('${c.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-size:11px;white-space:nowrap">✅ จบงาน</button>` : ''}
+      </td>
     </tr>`;
   }).join('');
 }
 
 async function renderRepairsReport() {
+  const myToken = ++reportRequestToken;
   document.getElementById('report-thead-row').innerHTML =
     '<th>วันที่/เวลา</th><th>พนักงาน</th><th>ลูกค้า</th><th>สินค้า/อาการเสีย</th><th>ประเมิน/ชำระ</th><th></th><th></th>';
   document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
@@ -2059,6 +2148,7 @@ async function renderRepairsReport() {
   } catch(e) {
     try { repairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e2) {}
   }
+  if (myToken !== reportRequestToken || reportViewMode !== 'repairs') return;
 
   const filtered = applyReportFilters(repairs, 'date');
   window._lastRepairs = filtered;
@@ -2078,19 +2168,27 @@ async function renderRepairsReport() {
   document.getElementById('report-body').innerHTML = filtered.map(r => {
     const d = parseFlexDate(r.date);
     const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
+    const isDone = r.status === 'จบงานแล้ว';
+    const statusBadge = isDone
+      ? `<span style="padding:2px 7px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:5px;color:#22c55e;font-size:10px;white-space:nowrap">✅ จบงานแล้ว</span>`
+      : `<span style="padding:2px 7px;background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:5px;color:#eab308;font-size:10px;white-space:nowrap">⏳ ดำเนินการ</span>`;
     return `<tr>
       <td style="white-space:nowrap">${t}</td>
       <td><span class="seller-badge">${r.seller || '-'}</span></td>
       <td>${r.cust || '-'}</td>
       <td style="font-size:12px;color:var(--text2);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item || '-'} — ${r.symptom || '-'}</td>
       <td style="font-size:12px">ประเมิน ${r.estimate || '-'} / ชำระ ${r.paid || '-'}</td>
-      <td></td>
-      <td><button onclick='loadRepairForEdit(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px" title="เปิดฟอร์มซ่อมเพื่อแก้ไข">✏️ แก้ไข</button></td>
+      <td>${statusBadge}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <button onclick='loadRepairForEdit(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px" title="เปิดฟอร์มซ่อมเพื่อแก้ไข">✏️ แก้ไข</button>
+        ${!isDone ? `<button onclick="completeRepairJob('${r.id}')" style="padding:4px 10px;background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-size:11px;white-space:nowrap">✅ จบงาน</button>` : ''}
+      </td>
     </tr>`;
   }).join('');
 }
 
 async function renderDepositsReport() {
+  const myToken = ++reportRequestToken;
   document.getElementById('report-thead-row').innerHTML =
     '<th>วันที่</th><th>พนักงาน</th><th>ลูกค้า</th><th>รายการ/สถานะ</th><th>มัดจำ/คงเหลือ</th><th></th><th></th>';
   document.getElementById('report-body').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:30px">⏳ กำลังโหลดข้อมูล...</td></tr>';
@@ -2103,6 +2201,7 @@ async function renderDepositsReport() {
   } catch(e) {
     deposits = [];
   }
+  if (myToken !== reportRequestToken || reportViewMode !== 'deposits') return;
 
   const filtered = applyReportFilters(deposits, 'date');
   window._lastDeposits = filtered;
@@ -2124,13 +2223,21 @@ async function renderDepositsReport() {
     const d = parseFlexDate(dep.date);
     const t = d ? d.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '-';
     const isPaid = dep.status === 'รับของแล้ว';
+    const isCancelled = dep.status === 'ยกเลิก';
     const statusBadge = isPaid
-      ? `<span style="padding:3px 8px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:5px;color:#22c55e;font-size:11px">✅ รับของแล้ว</span>`
+      ? `<span style="padding:3px 8px;background:rgba(34,197,94,0.15);border:1px solid #22c55e;border-radius:5px;color:#22c55e;font-size:11px">🟢 จ่ายครบ/รับของแล้ว</span>`
+      : isCancelled
+      ? `<span style="padding:3px 8px;background:rgba(153,153,153,0.15);border:1px solid #999;border-radius:5px;color:#999;font-size:11px;text-decoration:line-through">ยกเลิกบิลแล้ว</span>`
       : `<span style="padding:3px 8px;background:rgba(234,179,8,0.15);border:1px solid #eab308;border-radius:5px;color:#eab308;font-size:11px">⏳ ค้างชำระ</span>`;
-    const actionCell = isPaid
+    const depJson = JSON.stringify(dep).replace(/'/g, "&#39;");
+    const actionCell = (isPaid || isCancelled)
       ? ''
-      : `<button onclick='completeDeposit(${JSON.stringify(dep).replace(/'/g, "&#39;")})' style="padding:4px 10px;background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-size:11px;white-space:nowrap">✅ รับของแล้ว</button>`;
-    return `<tr>
+      : `<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+           <button onclick='completeDeposit(${depJson})' style="padding:4px 10px;background:transparent;border:1px solid var(--green);border-radius:5px;color:var(--green);cursor:pointer;font-size:11px;white-space:nowrap">📥 ตัดบิล/รับของ</button>
+           <button onclick='editDeposit(${depJson})' style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);cursor:pointer;font-size:11px;white-space:nowrap">✏️ แก้ไข</button>
+           <button onclick='cancelDepositBill(${depJson})' style="padding:4px 10px;background:transparent;border:1px solid var(--red);border-radius:5px;color:var(--red);cursor:pointer;font-size:11px;white-space:nowrap">❌ ยกเลิก</button>
+         </div>`;
+    return `<tr style="${isCancelled ? 'opacity:0.5' : ''}">
       <td style="white-space:nowrap">${t}</td>
       <td><span class="seller-badge">${dep.seller || '-'}</span></td>
       <td>${dep.cust || '-'}</td>
@@ -2258,6 +2365,41 @@ async function cancelSale(saleId, custName) {
     return;
   }
   renderReport();
+}
+
+// ✅ จบงานซ่อม/เคลม — แค่ทำเครื่องหมายสถานะ ไม่ลบข้อมูลออก
+async function completeRepairJob(repairId) {
+  if (!confirm('ยืนยันปิดงานซ่อมนี้เป็น "จบงานแล้ว" ใช่หรือไม่?')) return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'completeRepair', id: repairId })
+    });
+    const result = await res.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Failed');
+    showToast('✅ ปิดงานซ่อมเรียบร้อยแล้ว', 'success');
+  } catch(e) {
+    showToast('❌ ปิดงานไม่สำเร็จ: ' + e.message, 'error');
+    return;
+  }
+  renderRepairsReport();
+}
+
+async function completeClaimJob(claimId) {
+  if (!confirm('ยืนยันปิดงานเคลมนี้เป็น "จบงานแล้ว" ใช่หรือไม่?')) return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'completeClaim', id: claimId })
+    });
+    const result = await res.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Failed');
+    showToast('✅ ปิดงานเคลมเรียบร้อยแล้ว', 'success');
+  } catch(e) {
+    showToast('❌ ปิดงานไม่สำเร็จ: ' + e.message, 'error');
+    return;
+  }
+  renderClaimsReport();
 }
 
 // PRODUCTS DATA
@@ -3912,27 +4054,65 @@ if (!document.getElementById('deposit-modal')) {
         <div id="deposit-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 99999; align-items: center; justify-content: center;">
             <div style="background: #1a1a1a; padding: 20px; border-radius: 10px; width: 90%; max-width: 380px; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border: 1px solid #444; max-height: 90vh; overflow-y: auto;">
                 <h3 style="color: #eab308; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px;">💰 รับเงินมัดจำ</h3>
-                <input type="text" id="dep-cust" placeholder="ชื่อลูกค้า *" style="width: 100%; padding: 10px; margin: 10px 0; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
+                <div id="dep-edit-banner" style="display:none; background:rgba(147,51,234,0.15); border:1px solid #9333ea; border-radius:6px; padding:6px 10px; margin-bottom:10px; font-size:11px; color:#c084fc;">
+                  ✏️ กำลังแก้ไขบิลมัดจำเดิม #<span id="dep-edit-id"></span>
+                </div>
+                <div id="dep-cart-summary" style="background:#111; border:1px dashed #555; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px; max-height:120px; overflow-y:auto;"></div>
+                <input type="text" id="dep-cust" placeholder="ชื่อลูกค้า *" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
                 <input type="text" id="dep-phone" placeholder="เบอร์โทร" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
-                <textarea id="dep-items" placeholder="รายการสินค้า/รายละเอียด" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box; height: 60px; resize: none; font-family: inherit;"></textarea>
-                <input type="number" id="dep-total" placeholder="ยอดรวมทั้งหมด (บาท)" oninput="updateDepositBalance()" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
                 <input type="number" id="dep-amount" placeholder="ยอดมัดจำ (บาท) *" oninput="updateDepositBalance()" style="width: 100%; padding: 10px; margin: 0 0 10px; background: #333; border: 1px solid #555; color: #fff; border-radius: 4px; box-sizing: border-box;">
-                <div style="font-size: 13px; color: #aaa; margin-bottom: 15px;">คงเหลือ: <b id="dep-balance-display" style="color: #eab308;">0.00</b> บาท</div>
-                <button onclick="processDeposit()" style="width: 100%; padding: 10px; background: #eab308; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px;">💾 บันทึก &amp; พิมพ์ใบมัดจำ</button>
-                <button onclick="document.getElementById('deposit-modal').style.display='none'" style="width: 100%; padding: 10px; background: #444; border: none; color: #fff; margin-top: 10px; cursor: pointer; border-radius: 4px;">ยกเลิก</button>
+                <div style="font-size: 13px; color: #aaa; margin-bottom: 15px;">ยอดรวม: <b id="dep-total-display" style="color:#fff;">0.00</b> บาท &nbsp;|&nbsp; คงเหลือ: <b id="dep-balance-display" style="color: #eab308;">0.00</b> บาท</div>
+                <input type="hidden" id="dep-items" value="">
+                <input type="hidden" id="dep-total" value="">
+                <button onclick="processDeposit()" id="dep-save-btn" style="width: 100%; padding: 10px; background: #eab308; color: #000; border: none; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px;">💾 บันทึก &amp; พิมพ์ใบมัดจำ</button>
+                <button onclick="closeDepositModal()" style="width: 100%; padding: 10px; background: #444; border: none; color: #fff; margin-top: 10px; cursor: pointer; border-radius: 4px;">ยกเลิก</button>
             </div>
         </div>
     `;
     document.body.appendChild(modalDiv);
 }
 
+let editingDepositId = null;
+
+function renderDepositCartSummary() {
+  const box = document.getElementById('dep-cart-summary');
+  if (!box) return;
+  if (!cart || cart.length === 0) {
+    box.innerHTML = '<span style="color:#e02020">⚠️ ตะกร้าว่างเปล่า — กรุณาเลือกสินค้าใส่ตะกร้าก่อนรับมัดจำ</span>';
+    document.getElementById('dep-items').value = '';
+    document.getElementById('dep-total').value = '0';
+  } else {
+    box.innerHTML = cart.map(c => `<div style="display:flex;justify-content:space-between;color:#ddd;padding:2px 0">
+      <span>${c.name} x${c.qty}</span><span>${fmt(c.price * c.qty)}</span>
+    </div>`).join('');
+    const itemsText = cart.map(c => `${c.name} x${c.qty}`).join(', ');
+    const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+    document.getElementById('dep-items').value = itemsText;
+    document.getElementById('dep-total').value = total;
+  }
+  updateDepositBalance();
+}
+
 function updateDepositBalance() {
     const total = Number(document.getElementById('dep-total')?.value) || 0;
     const dep = Number(document.getElementById('dep-amount')?.value) || 0;
     const bal = Math.max(0, total - dep);
+    document.getElementById('dep-total-display').textContent = total.toLocaleString('th-TH', {minimumFractionDigits: 2});
     const el = document.getElementById('dep-balance-display');
     if (el) el.textContent = bal.toLocaleString('th-TH', {minimumFractionDigits: 2});
 }
+
+function openDepositModal() {
+  editingDepositId = null;
+  document.getElementById('dep-edit-banner').style.display = 'none';
+  document.getElementById('dep-save-btn').textContent = '💾 บันทึก & พิมพ์ใบมัดจำ';
+  document.getElementById('dep-cust').value = document.getElementById('cust-name')?.value || '';
+  document.getElementById('dep-phone').value = document.getElementById('cust-phone')?.value || '';
+  document.getElementById('dep-amount').value = '';
+  renderDepositCartSummary();
+  document.getElementById('deposit-modal').style.display = 'flex';
+}
+function closeDepositModal() { document.getElementById('deposit-modal').style.display = 'none'; }
 
 // 2. ฟังก์ชันเสกปุ่มเข้าไปในหน้าตะกร้า (ทำงานเงียบๆ เบื้องหลัง)
 setInterval(() => {
@@ -3942,9 +4122,9 @@ setInterval(() => {
     if (quoteBtn && !document.getElementById('btn-open-deposit')) {
         const depBtn = document.createElement('button');
         depBtn.id = 'btn-open-deposit';
-        depBtn.innerHTML = '💰 รับมัดจำสินค้า';
+        depBtn.innerHTML = '💰 รับมัดจำสินค้าในตะกร้า';
         depBtn.style.cssText = 'width: 100%; padding: 10px; margin-top: 10px; background: #eab308; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 15px; box-sizing: border-box;';
-        depBtn.onclick = () => { document.getElementById('deposit-modal').style.display = 'flex'; };
+        depBtn.onclick = () => { openDepositModal(); };
         
         // แอบเอาปุ่มไปวางต่อท้ายให้อัตโนมัติ!
         quoteBtn.parentNode.insertBefore(depBtn, quoteBtn.nextSibling);
@@ -4070,16 +4250,20 @@ function processDeposit() {
     const total = document.getElementById('dep-total').value.trim();
     const amt = document.getElementById('dep-amount').value.trim();
     if(!cust || !amt) { alert('กรุณากรอกชื่อและยอดมัดจำให้ครบถ้วนครับ'); return; }
+    if(!editingDepositId && (!cart || cart.length === 0)) { alert('กรุณาเลือกสินค้าใส่ตะกร้าก่อนรับมัดจำครับ'); return; }
 
+    const isEdit = !!editingDepositId;
     const balance = Math.max(0, (Number(total) || 0) - (Number(amt) || 0));
-    const depositId = 'DEP' + Date.now().toString().substring(5);
+    const depositId = isEdit ? editingDepositId : ('DEP' + Date.now().toString().substring(5));
     const d = new Date();
     const printDate = `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${(d.getFullYear()+543)} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
     const seller = (typeof currentUser !== 'undefined' && currentUser?.name) ? currentUser.name : 'พนักงาน';
 
     const depositData = {
+        action: isEdit ? 'updateDeposit' : 'saveDeposit',
         id: depositId, date: new Date().toISOString(),
         cust: cust, phone: phone, items: items,
+        itemsJson: JSON.stringify(cart || []),
         total: total, deposit: amt, balance: balance,
         seller: seller
     };
@@ -4088,16 +4272,24 @@ function processDeposit() {
     const url = typeof SCRIPT_URL !== 'undefined' ? SCRIPT_URL : (typeof scriptUrl !== 'undefined' ? scriptUrl : ''); 
     if(!url) { alert('ไม่พบการเชื่อมต่อ SCRIPT_URL'); return; }
 
-    document.getElementById('deposit-modal').style.display='none'; // ปิดหน้าต่างรอ
+    closeDepositModal();
 
     fetch(url, {
         method: 'POST',
-        body: JSON.stringify({ action: 'saveDeposit', ...depositData })
+        body: JSON.stringify(depositData)
     }).catch(err => console.error('Error saving deposit:', err));
 
     renderDepositReceipt(depositId, printDate, {
       cust: cust, phone: phone, items: items, total: total, deposit: amt, balance: balance, seller: seller
     });
+
+    // เคลียร์ตะกร้าหลังบันทึกมัดจำสำเร็จ (สินค้าถูก "จอง" ไว้ในบิลมัดจำแล้ว)
+    if (!isEdit) {
+      cart = [];
+      updateCartBadge();
+      if (typeof renderCart === 'function') renderCart();
+    }
+    editingDepositId = null;
 
     ['dep-cust','dep-phone','dep-items','dep-total','dep-amount'].forEach(id => {
       const el = document.getElementById(id);
