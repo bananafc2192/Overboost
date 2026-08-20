@@ -600,7 +600,8 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
   <div class="page" id="page-cart">
     <h2 style="margin-bottom:16px;font-size:18px">🛒 ตะกร้าสินค้า</h2>
     <div id="deposit-link-banner" style="display:none; background:rgba(234,179,8,0.12); border:1px solid var(--amber); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:var(--amber);">
-      🔖 บิลนี้เชื่อมกับมัดจำ #<span id="deposit-link-id"></span> — จ่ายมัดจำไว้แล้ว <b id="deposit-link-amt"></b> บาท (จะหักออกจากยอดที่ต้องชำระอัตโนมัติ)
+      🔖 บิลมัดจำ #<span id="deposit-link-id"></span> — รายการเดิม: <b id="deposit-link-items"></b><br>
+      ยอดรวม <b id="deposit-link-total"></b> บาท / จ่ายมัดจำไว้แล้ว <b id="deposit-link-amt"></b> บาท / คงเหลือต้องชำระ <b id="deposit-link-balance"></b> บาท (หักมัดจำให้อัตโนมัติในบิลขาย)
       <button onclick="cancelPendingDeposit()" style="float:right; background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:4px; padding:2px 10px; cursor:pointer; font-size:12px;">ยกเลิกการเชื่อม</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
@@ -1510,7 +1511,10 @@ function updateDepositLinkBanners() {
   if (pendingDeposit) {
     if (cartBanner) {
       document.getElementById('deposit-link-id').textContent = pendingDeposit.id || '-';
+      document.getElementById('deposit-link-items').textContent = pendingDeposit.items || '-';
+      document.getElementById('deposit-link-total').textContent = (Number(pendingDeposit.total)||0).toLocaleString('th-TH');
       document.getElementById('deposit-link-amt').textContent = fmt(getDepositDeductionAmount()).replace('฿','');
+      document.getElementById('deposit-link-balance').textContent = (Number(pendingDeposit.balance)||0).toLocaleString('th-TH');
       cartBanner.style.display = 'block';
     }
     if (quoteBanner) quoteBanner.style.display = 'block';
@@ -1549,8 +1553,8 @@ function completeDeposit(dep) {
   document.getElementById('cust-note').value = `รับของตามบิลมัดจำ #${dep.id}`;
   updateDepositLinkBanners();
   renderCart();
-  showPage('cart');
-  if (typeof showToast === 'function') showToast(`📋 เชื่อมบิลมัดจำ #${dep.id} แล้ว — ${hasStructuredItems ? 'ดึงรายการสินค้าเข้าตะกร้าให้แล้ว ตรวจสอบแล้วกดบันทึกการขายได้เลย' : 'กรุณาเลือกสินค้าตามรายการแล้วกดบันทึกการขาย'}`, 'info');
+  showPage(hasStructuredItems ? 'cart' : 'products');
+  if (typeof showToast === 'function') showToast(`📋 เชื่อมบิลมัดจำ #${dep.id} แล้ว — ${hasStructuredItems ? 'ดึงรายการสินค้าเข้าตะกร้าให้แล้ว ตรวจสอบแล้วกดบันทึกการขายได้เลย' : 'ไม่มีข้อมูลสินค้าแบบละเอียด กรุณาค้นหาและเลือกสินค้าตามรายการ "' + (dep.items || '-') + '" แล้วไปที่ตะกร้าเพื่อบันทึกการขาย'}`, 'info');
 }
 
 function editDeposit(dep) {
