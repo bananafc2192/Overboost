@@ -4161,7 +4161,7 @@ function renderDepositReceipt(depositId, printDate, f) {
 
   const titleBox = document.createElement('div');
   titleBox.style.cssText = 'background:#eee;border:1px solid #ccc;border-radius:6px;padding:8px;text-align:center;margin-bottom:12px;font-weight:700;font-size:16px;letter-spacing:1px;color:#000';
-  titleBox.textContent = 'ใบรับเงินมัดจำ (Deposit Receipt)';
+  titleBox.textContent = 'ใบเสร็จรับเงิน';
   printDiv.appendChild(titleBox);
 
   const rows = [
@@ -4170,21 +4170,27 @@ function renderDepositReceipt(depositId, printDate, f) {
     ['ชื่อลูกค้า', f.cust || '-'],
     ['เบอร์โทร', f.phone || '-'],
     ['รายการสินค้า', f.items || '-'],
-    ['ยอดรวมทั้งหมด', f.total ? Number(f.total).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
     ['มัดจำแล้ว', f.deposit ? Number(f.deposit).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
-    ['คงเหลือ', f.balance !== undefined ? Number(f.balance).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
+    ['คงเหลือที่ต้องชำระ', f.balance !== undefined ? Number(f.balance).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
     ['ผู้รับมัดจำ', f.seller || 'พนักงาน'],
+    ['ยอดรวมทั้งหมด', f.total ? Number(f.total).toLocaleString('th-TH',{minimumFractionDigits:2}) + ' บาท' : '-'],
   ];
   const table = document.createElement('table');
   table.className = 'quote-table';
   const tbody = document.createElement('tbody');
   rows.forEach(([label, val]) => {
+    const isGrandTotal = label === 'ยอดรวมทั้งหมด';
     const tr = document.createElement('tr');
+    if (isGrandTotal) tr.style.borderTop = '2px solid #000';
     const td1 = document.createElement('td');
-    td1.style.cssText = 'font-weight:600;width:38%;color:#000';
+    td1.style.cssText = isGrandTotal
+      ? 'font-weight:700;width:38%;color:#000;font-size:14px;padding-top:8px'
+      : 'font-weight:600;width:38%;color:#000';
     td1.textContent = label;
     const td2 = document.createElement('td');
-    td2.style.cssText = 'color:#000;word-break:break-word';
+    td2.style.cssText = isGrandTotal
+      ? 'color:#000;word-break:break-word;font-weight:700;font-size:14px;padding-top:8px'
+      : 'color:#000;word-break:break-word';
     td2.textContent = val;
     tr.appendChild(td1); tr.appendChild(td2);
     tbody.appendChild(tr);
