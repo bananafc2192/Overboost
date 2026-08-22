@@ -928,7 +928,10 @@ function doLogout() {
 }
 
 // 🔐 คืนสถานะล็อกอินไว้เมื่อ refresh หน้า (จนกว่าจะกด "ออก" จริงๆ)
-(function restoreSession() {
+// หมายเหตุ: ต้องรอให้ทั้งหน้าโหลดเสร็จก่อน (window.onload) ห้ามเรียกทันทีตรงนี้
+// เพราะตัวแปรอย่าง PRODUCTS ยังถูกประกาศ (let) อยู่ด้านล่างของไฟล์ ยังเข้าถึงไม่ได้ ณ จุดนี้
+// ถ้าเรียกทันที initApp()/filterProducts() จะพังเงียบๆ (error โดน catch กลืนไป) ทำให้สินค้าไม่ขึ้นหลัง refresh
+window.addEventListener('load', function restoreSession() {
   try {
     const saved = localStorage.getItem('ovb_session');
     if (!saved) return;
@@ -944,8 +947,8 @@ function doLogout() {
       document.getElementById('tab-report').style.display = 'inline-block';
     }
     initApp();
-  } catch(e) { /* ถ้า parse ไม่ได้ ปล่อยให้เข้าหน้า login ตามปกติ */ }
-})();
+  } catch(e) { console.error('restoreSession error:', e); /* ถ้า parse ไม่ได้ ปล่อยให้เข้าหน้า login ตามปกติ */ }
+});
 
 function initApp() {
   const catSel = document.getElementById('cat-filter');
