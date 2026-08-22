@@ -3038,6 +3038,7 @@ function closeClaimModal() { document.getElementById('claim-modal').style.displa
 function closeClaimHistory() { document.getElementById('claim-history-modal').style.display = 'none'; }
 
 let editingRepairId = null;
+let editingRepairOriginalLinkedSaleId = '';
 let repairParts = [];
 function openRepairModal() {
   if(!checkAuthBefore('ทำรายการรับซ่อม')) return;
@@ -3054,6 +3055,7 @@ function closeRepairModal() { document.getElementById('repair-modal').style.disp
 
 function cancelEditRepair() {
   editingRepairId = null;
+  editingRepairOriginalLinkedSaleId = '';
   document.getElementById('rp-edit-banner').style.display = 'none';
   document.getElementById('rp-save-btn').textContent = '💾 บันทึก & พิมพ์ใบรับซ่อม';
   document.getElementById('rp-find-results').style.display = 'none';
@@ -3176,14 +3178,15 @@ function loadRepairForEdit(r) {
   document.getElementById('rp-accessories').value = r.acc || '';
   document.getElementById('rp-symptom').value = r.symptom || '';
   document.getElementById('rp-estimate').value = r.estimate || '';
-  document.getElementById('rp-paid').value = r.paid || '';
   document.getElementById('rp-address').value = r.address || '';
   document.getElementById('rp-remark').value = r.remark || '';
-  document.getElementById('rp-labor').value = '';
-  repairParts = [];
-  renderRepairPartsList();
+  document.getElementById('rp-labor').value = r.labor || '';
+  try { repairParts = JSON.parse(r.partsJson || '[]'); } catch(e) { repairParts = []; }
+  renderRepairPartsList(); // เรียกก่อน แล้วค่อยตั้งค่ายอดชำระจริงทับด้านล่าง เพราะฟังก์ชันนี้จะคำนวณยอดชำระใหม่จากอะไหล่+ค่าแรงอัตโนมัติ ซึ่งอาจไม่ตรงกับยอดที่เคยแก้เองไว้
+  document.getElementById('rp-paid').value = r.paid || '';
 
   editingRepairId = r.id;
+  editingRepairOriginalLinkedSaleId = r.linkedSaleId || '';
   document.getElementById('rp-edit-id').textContent = r.id || '-';
   document.getElementById('rp-edit-banner').style.display = 'block';
   document.getElementById('rp-save-btn').textContent = '💾 บันทึกการแก้ไข & พิมพ์ใบซ่อม';
@@ -3565,6 +3568,16 @@ async function processRepair() {
   let remark = document.getElementById('rp-remark').value.trim();
   let partsSaleId = '';
 
+  // ✏️ ถ้าแก้ไขบิลซ่อมที่เคยผูกอะไหล่ไว้ -> ยกเลิกบิลขายอะไหล่เดิมก่อนเสมอ (คืนสต็อก) แล้วค่อยตัดใหม่ตามรายการปัจจุบัน กันสต็อกเพี้ยนถ้ามีการเพิ่ม/ลบ/เปลี่ยนอะไหล่
+  if (isEdit && editingRepairOriginalLinkedSaleId) {
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'cancelSale', id: editingRepairOriginalLinkedSaleId })
+      });
+    } catch(e) { console.error('Error cancelling old parts sale:', e); }
+  }
+
   // 🔩 ถ้ามีการเบิกอะไหล่จาก stock -> ตัดสต็อกจริงผ่านระบบขายเดิม (บันทึกเป็นยอดขาย + คืนสต็อกได้ผ่านปุ่มยกเลิกบิลในรายงาน)
   if (repairParts.length > 0) {
     if (typeof showToast === 'function') showToast('⏳ กำลังตัดสต็อกอะไหล่...', 'info');
@@ -3604,7 +3617,10 @@ async function processRepair() {
     paid: document.getElementById('rp-paid').value.trim(),
     address: document.getElementById('rp-address').value.trim(),
     remark: remark,
-    seller: sellerName
+    seller: sellerName,
+    partsJson: JSON.stringify(repairParts),
+    labor: document.getElementById('rp-labor')?.value || '',
+    linkedSaleId: partsSaleId
   };
 
   // 💾 บันทึกลงเครื่อง (ประวัติ)
