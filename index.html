@@ -1315,6 +1315,28 @@ function filterProducts() {
   renderProducts();
 }
 
+// 🔗 แยกลิงก์อ้างอิงหลายเว็บจากช่องเดียว (คั่นด้วยขึ้นบรรทัดใหม่ หรือ จุลภาค) พร้อมดึงชื่อโดเมนมาโชว์
+function parseRefUrls(raw) {
+  if (!raw) return [];
+  return raw.split(/[\n,]+/).map(u => u.trim()).filter(Boolean).map(url => {
+    let label = 'ลิงก์';
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      const parts = host.split('.');
+      label = (parts.length >= 2 ? parts[parts.length - 2] : parts[0]).toUpperCase();
+    } catch(e) {}
+    return { url, label };
+  });
+}
+function renderRefUrlButtons(raw, big) {
+  const links = parseRefUrls(raw);
+  if (links.length === 0) return '';
+  const btnStyle = big
+    ? 'display:inline-block;padding:6px 12px;margin:2px 4px 2px 0;background:rgba(245,158,11,0.15);border:1px solid var(--amber);border-radius:6px;font-size:13px;font-weight:600;color:var(--amber);text-decoration:none'
+    : 'display:inline-block;padding:4px 9px;margin:1px 3px 1px 0;background:rgba(245,158,11,0.12);border:1px solid var(--amber);border-radius:5px;font-size:11px;font-weight:600;color:var(--amber);text-decoration:none';
+  return links.map(l => `<a href="${l.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="${btnStyle}">🔍 ${l.label}</a>`).join('');
+}
+
 function renderProducts() {
   const total = filteredProds.length;
   const pages = Math.ceil(total / PER_PAGE);
@@ -1328,7 +1350,7 @@ function renderProducts() {
     return `<div class="product-card" onclick="openModal('${p.id}')">
       ${p.imageUrl ? `<img class="prod-img" src="${p.imageUrl}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy"><div class="prod-img-placeholder" style="display:none">📦</div>` : '<div class="prod-img-placeholder">📦</div>'}
       ${p.imageUrl ? `<a href="${p.imageUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;font-size:11px;color:#3b82f6;margin:-6px 0 4px;text-decoration:none">🔗 ดูรูปสินค้า (ลิงก์เต็ม)</a>` : ''}
-      ${p.refUrl ? `<a href="${p.refUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;font-size:11px;color:var(--amber);margin:0 0 8px;text-decoration:none">🔍 เช็คสเปค/ราคาเว็บอื่น</a>` : ''}
+      ${p.refUrl ? `<div style="margin:0 0 8px">${renderRefUrlButtons(p.refUrl, false)}</div>` : ''}
       <div class="prod-stock ${inStock ? 'in' : 'out'}">${inStock ? 'มีสินค้า' : 'หมด'}</div>
       <div class="prod-id">${p.id} · ${catName}</div>
       <div class="prod-name">${p.name}</div>
@@ -1372,7 +1394,7 @@ function openModal(id) {
   document.getElementById('m-stock').innerHTML = `<span style="color: #ff3333; font-size: 20px; font-weight: bold;">Stock: ${currentProd.stock} ชิ้น</span>`;
   
   document.getElementById('m-notice').innerHTML = currentProd.notice ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--amber)">⚠ ${currentProd.notice}</div>` : '';
-  document.getElementById('m-refurl').innerHTML = currentProd.refUrl ? `<a href="${currentProd.refUrl}" target="_blank" rel="noopener" style="display:inline-block;font-size:12px;color:var(--amber);text-decoration:none">🔍 เช็คสเปค/ราคาเว็บอื่น →</a>` : '';
+  document.getElementById('m-refurl').innerHTML = currentProd.refUrl ? renderRefUrlButtons(currentProd.refUrl, true) : '';
   const detail = currentProd.detail;
   let specsHtml = '';
   if (detail && detail.includes(',')) {
