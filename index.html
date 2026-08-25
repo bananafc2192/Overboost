@@ -807,6 +807,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
     <div class="modal-title" id="m-name"></div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px" id="m-id"></div>
     <div id="m-notice" style="margin-bottom:10px"></div>
+    <div id="m-refurl" style="margin-bottom:10px"></div>
     <div class="price-tier">
       <div class="price-tier-card">
         <div class="price-tier-label">ราคาขาย</div>
@@ -1326,6 +1327,8 @@ function renderProducts() {
     const catName = CATS.find(c => c.id === p.catId)?.name || '';
     return `<div class="product-card" onclick="openModal('${p.id}')">
       ${p.imageUrl ? `<img class="prod-img" src="${p.imageUrl}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" loading="lazy"><div class="prod-img-placeholder" style="display:none">📦</div>` : '<div class="prod-img-placeholder">📦</div>'}
+      ${p.imageUrl ? `<a href="${p.imageUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;font-size:11px;color:#3b82f6;margin:-6px 0 4px;text-decoration:none">🔗 ดูรูปสินค้า (ลิงก์เต็ม)</a>` : ''}
+      ${p.refUrl ? `<a href="${p.refUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:block;text-align:center;font-size:11px;color:var(--amber);margin:0 0 8px;text-decoration:none">🔍 เช็คสเปค/ราคาเว็บอื่น</a>` : ''}
       <div class="prod-stock ${inStock ? 'in' : 'out'}">${inStock ? 'มีสินค้า' : 'หมด'}</div>
       <div class="prod-id">${p.id} · ${catName}</div>
       <div class="prod-name">${p.name}</div>
@@ -1369,6 +1372,7 @@ function openModal(id) {
   document.getElementById('m-stock').innerHTML = `<span style="color: #ff3333; font-size: 20px; font-weight: bold;">Stock: ${currentProd.stock} ชิ้น</span>`;
   
   document.getElementById('m-notice').innerHTML = currentProd.notice ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--amber)">⚠ ${currentProd.notice}</div>` : '';
+  document.getElementById('m-refurl').innerHTML = currentProd.refUrl ? `<a href="${currentProd.refUrl}" target="_blank" rel="noopener" style="display:inline-block;font-size:12px;color:var(--amber);text-decoration:none">🔍 เช็คสเปค/ราคาเว็บอื่น →</a>` : '';
   const detail = currentProd.detail;
   let specsHtml = '';
   if (detail && detail.includes(',')) {
