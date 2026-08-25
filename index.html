@@ -169,6 +169,21 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
 }
 .btn-addcart:hover { background: var(--red-dark); }
 .btn-addcart:disabled { background: var(--bg3); color: var(--text2); cursor: not-allowed; }
+.btn-product-url {
+  width: 100%; margin-top: 5px; padding: 8px;
+  background: #2563eb; border: none; border-radius: 6px;
+  color: #fff; font-size: 13px; cursor: pointer; font-weight: 500;
+  display: block; text-align: center; text-decoration: none; box-sizing: border-box;
+}
+.btn-product-url:hover { background: #1d4ed8; }
+.modal-product-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; box-sizing: border-box; padding: 10px 12px;
+  margin: 10px 0 4px; border-radius: 8px;
+  background: #2563eb; color: #fff; text-decoration: none;
+  font-size: 14px; font-weight: 600;
+}
+.modal-product-link:hover { background: #1d4ed8; }
 .notice-badge {
   font-size: 11px; color: var(--amber); margin-top: 4px;
   display: flex; align-items: center; gap: 4px;
@@ -822,6 +837,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
       </div>
     </div>
     <table class="spec-table" id="m-specs"></table>
+    <div id="m-product-url"></div>
     <div style="font-size:12px;color:var(--text2);margin:8px 0" id="m-stock"></div>
     <div class="qty-row">
       <label style="font-size:13px;color:var(--text2)">จำนวน:</label>
@@ -1314,6 +1330,25 @@ function filterProducts() {
   renderProducts();
 }
 
+function getSafeProductUrl(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  try {
+    const u = new URL(value, window.location.href);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+  } catch (e) {}
+  return '';
+}
+
+function openProductUrl(url) {
+  const safeUrl = getSafeProductUrl(url);
+  if (!safeUrl) {
+    showToast('⚠ ยังไม่มี URL สินค้าสำหรับรายการนี้', 'error');
+    return;
+  }
+  window.open(safeUrl, '_blank', 'noopener,noreferrer');
+}
+
 function renderProducts() {
   const total = filteredProds.length;
   const pages = Math.ceil(total / PER_PAGE);
@@ -1334,6 +1369,7 @@ function renderProducts() {
       ${p.notice ? `<div class="notice-badge">⚠ ${p.notice.substring(0,30)}...</div>` : ''}
       <button class="btn-addcart" onclick="event.stopPropagation();quickAdd('${p.id}')" ${!inStock ? 'disabled' : ''}>+ ใส่ตะกร้า</button>
       <button class="btn-addcart" style="background:#3b82f6; margin-top:5px;" onclick="event.stopPropagation(); sendToQuote('${p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${p.priceRetail || 0})">📋 + ใบเสนอราคา</button>
+      ${getSafeProductUrl(p.url) ? `<button class="btn-product-url" onclick="event.stopPropagation();openProductUrl(${JSON.stringify(getSafeProductUrl(p.url))})">🔗 ดูสินค้า / รูป / สเปค</button>` : ''}
     </div>`;
   }).join('');
 
@@ -1380,6 +1416,10 @@ function openModal(id) {
     specsHtml = `<tr><td colspan="2" style="color:var(--text2);font-size:12px;white-space:pre-wrap">${detail.substring(0,300)}</td></tr>`;
   }
   document.getElementById('m-specs').innerHTML = specsHtml;
+  const modalUrl = getSafeProductUrl(currentProd.url);
+  document.getElementById('m-product-url').innerHTML = modalUrl
+    ? `<a class="modal-product-link" href="${modalUrl}" target="_blank" rel="noopener noreferrer">🔗 เปิดเว็บสินค้า / ดูรูป / สเปค</a>`
+    : `<div style="font-size:12px;color:var(--text2);padding:8px 0">🔗 ยังไม่มี URL สินค้าสำหรับรายการนี้</div>`;
   document.getElementById('m-qty').value = 1;
   document.getElementById('prod-modal').classList.add('open');
 }
