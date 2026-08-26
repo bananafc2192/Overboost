@@ -1321,9 +1321,30 @@ function parseRefUrls(raw) {
   return raw.split(/[\n,]+/).map(u => u.trim()).filter(Boolean).map(url => {
     let label = 'ลิงก์';
     try {
-      const host = new URL(url).hostname.replace(/^www\./, '');
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
       const parts = host.split('.');
-      label = (parts.length >= 2 ? parts[parts.length - 2] : parts[0]).toUpperCase();
+
+      // รองรับโดเมนไทยแบบ bnn.in.th / jib.co.th / advice.co.th
+      // และโดเมนทั่วไปแบบ banana-it.com / dell.com
+      const thaiSecondLevel = ['co.th', 'in.th', 'or.th', 'ac.th', 'go.th', 'mi.th'];
+      const suffix = parts.slice(-2).join('.');
+
+      if (thaiSecondLevel.includes(suffix) && parts.length >= 3) {
+        label = parts[parts.length - 3].toUpperCase();
+      } else if (parts.length >= 2) {
+        label = parts[parts.length - 2].toUpperCase();
+      } else if (parts.length === 1) {
+        label = parts[0].toUpperCase();
+      }
+
+      // ชื่อที่อยากให้พนักงานเห็นแบบอ่านง่าย
+      const aliases = {
+        'BNN': 'BNN',
+        'JIB': 'JIB',
+        'ADVICE': 'ADVICE',
+        'BANANA-IT': 'BANANA-IT'
+      };
+      label = aliases[label] || label;
     } catch(e) {}
     return { url, label };
   });
