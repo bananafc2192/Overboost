@@ -88,7 +88,6 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-
   border: none; border-radius: 6px; color: #fff; font-size: 13px;
   cursor: pointer; font-weight: 600;
 }
-<!-- ... existing code ... -->
 .cart-badge {
   position: absolute; top: -6px; right: -6px;
   background: #fff; color: var(--red); font-size: 11px; font-weight: 700;
@@ -569,6 +568,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
     <div class="nav-tab" onclick="openRepairModal()" style="background:#9333ea; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔧 รับซ่อม</div>
     <div class="nav-tab" onclick="openReprintSearch()" style="background:#2563eb; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔎 ค้นหาบิล</div>
     <div class="nav-tab" onclick="openQuoteModal()" style="background:#0f766e; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">📝 ใบเสนอราคา</div>
+    <div class="nav-tab" onclick="showPage('warranty')" style="background:#0891b2; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛡️ เช็คประกัน Online</div>
 </div>
     </div>
     <div class="topbar-right">
@@ -721,6 +721,16 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
   </div>
 
   <!-- HISTORY SEARCH PAGE -->
+  <div class="page" id="page-warranty">
+    <div style="max-width:900px;margin:0 auto">
+      <h2 style="font-size:18px;margin-bottom:6px">🛡️ เช็คประกัน Online</h2>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:20px">กดปุ่มเว็บที่ต้องการเพื่อไปเช็คสถานะประกันสินค้าโดยตรง</div>
+      <div id="warranty-links-container" style="display:flex;flex-wrap:wrap;gap:10px">
+        <div style="color:var(--text2);font-size:13px">⏳ กำลังโหลด...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="page" id="page-history">
     <div style="max-width:900px;margin:0 auto">
       <h2 style="font-size:18px;margin-bottom:16px">🔍 ค้นหาประวัติการซื้อ</h2>
@@ -1358,6 +1368,40 @@ function renderRefUrlButtons(raw, big) {
   return links.map(l => `<a href="${l.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="${btnStyle}">🔍 ${l.label}</a>`).join('');
 }
 
+// 🛡️ เช็คประกัน Online — ดึงรายการลิงก์จากชีต แล้วโชว์เป็นปุ่มใหญ่ๆ กดได้เลย
+async function loadWarrantyLinks() {
+  const container = document.getElementById('warranty-links-container');
+  container.innerHTML = '<div style="color:var(--text2);font-size:13px">⏳ กำลังโหลด...</div>';
+
+  let links = [];
+  try {
+    const res = await fetch(API_URL + '?action=getWarrantyLinks');
+    const data = await res.json();
+    links = data.links || [];
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--red-light);font-size:13px">❌ โหลดลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง</div>';
+    return;
+  }
+
+  if (links.length === 0) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:13px">ยังไม่มีลิงก์เช็คประกัน — เพิ่มได้ในชีต WarrantyLinks</div>';
+    return;
+  }
+
+  container.innerHTML = links.map(url => {
+    let label = url;
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '');
+      const parts = host.split('.');
+      const compoundTlds = ['co.th','in.th','or.th','ac.th','go.th','net.th','mi.th','co.uk','org.uk','ac.uk','co.jp','co.kr','com.au','co.nz','com.sg','com.my','com.hk','com.cn','co.in'];
+      const lastTwo = parts.slice(-2).join('.');
+      const brandIdx = (compoundTlds.includes(lastTwo) && parts.length >= 3) ? parts.length - 3 : parts.length - 2;
+      label = (parts[brandIdx] || parts[0]).toUpperCase();
+    } catch(e) {}
+    return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:14px 22px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:15px;font-weight:600;transition:border-color 0.15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">🛡️ ${label}</a>`;
+  }).join('');
+}
+
 function renderProducts() {
   const total = filteredProds.length;
   const pages = Math.ceil(total / PER_PAGE);
@@ -1477,6 +1521,7 @@ function showPage(pg) {
   if (tabEl) tabEl.classList.add('active');
   if (pg === 'cart') renderCart();
   if (pg === 'report') renderReport();
+  if (pg === 'warranty') loadWarrantyLinks();
   if (pg === 'history') {
     clearHistCache(); // รีเฟรชข้อมูลทุกครั้งที่เปิดหน้า
     const kw = document.getElementById('hist-keyword').value.trim();
@@ -3898,30 +3943,6 @@ function updateQuoteItemQty(index, val) { quoteItems[index].qty = parseInt(val) 
 function updateQuoteItemPrice(index, val) { quoteItems[index].price = parseFloat(val) || 0; renderQuoteItems(); }
 function updateQuoteItemName(index, val) { quoteItems[index].name = val; }
 
-// แสดงตาราง
-function renderQuoteItems() {
-    const container = document.getElementById('qt-items-container');
-    if(!container) return;
-    
-    let html = '';
-    let grandTotal = 0;
-    quoteItems.forEach((item, index) => {
-        grandTotal += (item.price * item.qty);
-        html += `
-        <div style="display:grid; grid-template-columns: 2fr 70px 100px 100px 30px; gap:5px; margin-bottom:5px; align-items:center;">
-            <input type="text" value="${item.name}" onchange="updateQuoteItemName(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px;">
-            <input type="number" min="1" value="${item.qty}" onchange="updateQuoteItemQty(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:center;">
-            <input type="number" min="0" value="${item.price}" onchange="updateQuoteItemPrice(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:right;">
-            <div style="text-align:right; color:#fff;">${(item.price * item.qty).toLocaleString()}</div>
-            <button onclick="removeQuoteItem(${index})" style="background:transparent; border:none; color:#ff3333; cursor:pointer;">🗑️</button>
-        </div>`;
-    });
-    container.innerHTML = html;
-    if(document.getElementById('qt-grand-total')) document.getElementById('qt-grand-total').textContent = grandTotal.toLocaleString();
-}
-
-<!-- ... existing code ... -->
-// แสดงตาราง
 function renderQuoteItems() {
     const container = document.getElementById('qt-items-container');
     if(!container) return;
@@ -4111,7 +4132,6 @@ function processQuote() {
     }, 500);
 }
 // --- จบโซนระบบใบเสนอราคา ---
-<!-- ... existing code ... -->
 </script>
 <!-- ========================================== -->
 <!-- 💰 ระบบมัดจำ (แบบแทรกอัตโนมัติ ปลอดภัย 100%) -->
