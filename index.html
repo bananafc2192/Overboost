@@ -1388,16 +1388,19 @@ async function loadWarrantyLinks() {
     return;
   }
 
-  container.innerHTML = links.map(url => {
-    let label = url;
-    try {
-      const host = new URL(url).hostname.replace(/^www\./, '');
-      const parts = host.split('.');
-      const compoundTlds = ['co.th','in.th','or.th','ac.th','go.th','net.th','mi.th','co.uk','org.uk','ac.uk','co.jp','co.kr','com.au','co.nz','com.sg','com.my','com.hk','com.cn','co.in'];
-      const lastTwo = parts.slice(-2).join('.');
-      const brandIdx = (compoundTlds.includes(lastTwo) && parts.length >= 3) ? parts.length - 3 : parts.length - 2;
-      label = (parts[brandIdx] || parts[0]).toUpperCase();
-    } catch(e) {}
+  container.innerHTML = links.map(item => {
+    const url = typeof item === 'string' ? item : item.url;
+    let label = (typeof item === 'object' && item.label) ? item.label : url;
+    if (!(typeof item === 'object' && item.label)) {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        const parts = host.split('.');
+        const compoundTlds = ['co.th','in.th','or.th','ac.th','go.th','net.th','mi.th','co.uk','org.uk','ac.uk','co.jp','co.kr','com.au','co.nz','com.sg','com.my','com.hk','com.cn','co.in'];
+        const lastTwo = parts.slice(-2).join('.');
+        const brandIdx = (compoundTlds.includes(lastTwo) && parts.length >= 3) ? parts.length - 3 : parts.length - 2;
+        label = (parts[brandIdx] || parts[0]).toUpperCase();
+      } catch(e) {}
+    }
     return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:14px 22px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:15px;font-weight:600;transition:border-color 0.15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">🛡️ ${label}</a>`;
   }).join('');
 }
