@@ -1401,7 +1401,11 @@ async function loadWarrantyLinks() {
         label = (parts[brandIdx] || parts[0]).toUpperCase();
       } catch(e) {}
     }
-    return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:14px 22px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:15px;font-weight:600;transition:border-color 0.15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">🛡️ ${label}</a>`;
+    const logoUrl = (typeof item === 'object' && item.logoUrl) ? item.logoUrl : '';
+    const icon = logoUrl
+      ? `<img src="${logoUrl}" alt="" style="width:24px;height:24px;object-fit:contain;border-radius:4px" onerror="this.outerHTML='🛡️'">`
+      : '🛡️';
+    return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:14px 22px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);text-decoration:none;font-size:15px;font-weight:600;transition:border-color 0.15s" onmouseover="this.style.borderColor='#0891b2'" onmouseout="this.style.borderColor='var(--border)'">${icon} ${label}</a>`;
   }).join('');
 }
 
