@@ -2048,7 +2048,22 @@ function setPageSize(mode) {
     ? '@media print { @page { margin: 12mm; size: A4; } }'
     : '@media print { @page { margin: 3mm; size: 80mm auto; } }';
 }
+// 🧹 ล้างเศษ div/style ที่ค้างจากการพิมพ์ใบเคลม/ใบซ่อม/ใบมัดจำครั้งก่อนๆ ทั้งหมด
+// (บั๊กสำคัญที่แก้: ถ้าไม่ล้าง ใบที่พิมพ์ไปก่อนหน้าจะไปบังใบที่ต้องการพิมพ์ใหม่ในครั้งถัดไป
+//  เช่น พิมพ์ใบซ่อมตอนบ่าย 2 โมง แล้วตอน 4 โมงมาขายของ+พิมพ์ใบเสร็จ กลับเห็นใบซ่อมเก่าโผล่มาแทน)
+function clearAllPrintArtifacts() {
+  ['claim-print-layout', 'repair-print-layout', 'deposit-print-layout'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+  ['claim-print-style', 'repair-print-style', 'deposit-print-style'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  });
+}
+
 function doPrint() {
+  clearAllPrintArtifacts(); // กันเศษใบเคลม/ซ่อม/มัดจำเก่าค้างมาบังใบเสร็จขาย
   document.body.classList.remove('print-a4', 'print-slip');
   document.body.classList.add('print-' + printMode);
   setPageSize(printMode);
@@ -3375,6 +3390,7 @@ function selectClaimBill(idx) {
 let claimPrintMode = 'slip';
 function renderClaimReceipt(claimId, printDate, f, mode) {
   mode = mode || 'slip';
+  clearAllPrintArtifacts(); // ล้างเศษใบพิมพ์ก่อนหน้าทั้งหมดก่อนเสมอ กันไปบังกัน
   let printDiv = document.getElementById('claim-print-layout');
   if (printDiv) printDiv.remove();
 
@@ -3486,6 +3502,7 @@ function renderClaimReceipt(claimId, printDate, f, mode) {
   setTimeout(() => {
     window.print();
     document.body.classList.remove('print-a4', 'print-slip');
+    setTimeout(clearAllPrintArtifacts, 1500); // เก็บกวาดหลังพิมพ์เสร็จทันที กันเศษค้างไปบังใบถัดไป
   }, 500);
 }
 
@@ -3493,6 +3510,7 @@ function renderClaimReceipt(claimId, printDate, f, mode) {
 let repairPrintMode = 'slip';
 function renderRepairReceipt(repairId, printDate, f, mode) {
   mode = mode || 'slip';
+  clearAllPrintArtifacts(); // ล้างเศษใบพิมพ์ก่อนหน้าทั้งหมดก่อนเสมอ กันไปบังกัน
   let printDiv = document.getElementById('repair-print-layout');
   if (printDiv) printDiv.remove();
 
@@ -3650,6 +3668,7 @@ function renderRepairReceipt(repairId, printDate, f, mode) {
   setTimeout(() => {
     window.print();
     document.body.classList.remove('print-a4', 'print-slip');
+    setTimeout(clearAllPrintArtifacts, 1500); // เก็บกวาดหลังพิมพ์เสร็จทันที กันเศษค้างไปบังใบถัดไป
   }, 500);
 }
 
@@ -4230,6 +4249,7 @@ setInterval(() => {
 
 // 3. 🖨️ สร้างใบมัดจำ (ใช้ดีไซน์เดียวกับสลิปขาย/ใบเคลม/ใบซ่อม)
 function renderDepositReceipt(depositId, printDate, f) {
+  clearAllPrintArtifacts(); // ล้างเศษใบพิมพ์ก่อนหน้าทั้งหมดก่อนเสมอ กันไปบังกัน
   let printDiv = document.getElementById('deposit-print-layout');
   if (printDiv) printDiv.remove();
 
@@ -4342,6 +4362,7 @@ function renderDepositReceipt(depositId, printDate, f) {
   setTimeout(() => {
     window.print();
     document.body.classList.remove('print-a4', 'print-slip');
+    setTimeout(clearAllPrintArtifacts, 1500); // เก็บกวาดหลังพิมพ์เสร็จทันที กันเศษค้างไปบังใบถัดไป
   }, 500);
 }
 
