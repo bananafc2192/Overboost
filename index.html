@@ -564,6 +564,7 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
     <div class="nav-tab" onclick="showPage('cart')" style="background:#15803d; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛒 ตะกร้า</div>
     <div class="nav-tab" onclick="showPage('history')" style="background:#6d28d9; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔍 ประวัติ</div>
     <div class="nav-tab admin-only" id="tab-report" onclick="showPage('report')" style="background:#b45309; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">📊 รายงาน</div>
+    <div class="nav-tab admin-only" id="tab-online-users" onclick="showPage('online-users')" style="background:#4338ca; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">👥 ผู้ใช้งานออนไลน์</div>
     <div class="nav-tab" onclick="openClaimModal()" style="background:#c2410c; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🛠️ รับเคลม</div>
     <div class="nav-tab" onclick="openRepairModal()" style="background:#9333ea; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔧 รับซ่อม</div>
     <div class="nav-tab" onclick="openReprintSearch()" style="background:#2563eb; color:#fff; border-radius:4px; padding:2px 8px; cursor:pointer; margin-left:5px; white-space:nowrap;">🔎 ค้นหาบิล</div>
@@ -726,6 +727,19 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
       <h2 style="font-size:18px;margin-bottom:6px">🛡️ เช็คประกัน Online</h2>
       <div style="font-size:13px;color:var(--text2);margin-bottom:20px">กดปุ่มเว็บที่ต้องการเพื่อไปเช็คสถานะประกันสินค้าโดยตรง</div>
       <div id="warranty-links-container" style="display:flex;flex-wrap:wrap;gap:10px">
+        <div style="color:var(--text2);font-size:13px">⏳ กำลังโหลด...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="page-online-users">
+    <div style="max-width:700px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <h2 style="font-size:18px">👥 ผู้ใช้งานออนไลน์</h2>
+        <button onclick="renderOnlineUsers()" style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);cursor:pointer;font-size:12px">🔄 รีเฟรช</button>
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:20px">ออนไลน์ = มีการใช้งานภายใน 3 นาทีที่ผ่านมา (อัปเดตอัตโนมัติทุก 15 วิ)</div>
+      <div id="online-users-container">
         <div style="color:var(--text2);font-size:13px">⏳ กำลังโหลด...</div>
       </div>
     </div>
@@ -969,10 +983,84 @@ function initApp() {
   // ไม่ตั้ง default วันที่
   updateSellerFilter();
   initMonthFilter();
-  if (currentUser && currentUser.role === 'admin') startAdminPoll();
+  if (currentUser && currentUser.role === 'admin') {
+    startAdminPoll();
+  }
+  startHeartbeat();
 
   // --- เติมคำสั่งดึงข้อมูลสินค้าตรงนี้ครับ! ---
   loadProductsFromSheet(); 
+}
+
+// 💓 ส่งสัญญาณ "ยังใช้งานอยู่" ทุก 60 วิ + เช็คว่าถูกแอดมินบังคับออกจากระบบมั้ย
+let heartbeatTimer = null;
+function startHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  sendHeartbeat();
+  heartbeatTimer = setInterval(sendHeartbeat, 60000);
+}
+async function sendHeartbeat() {
+  if (!currentUser || !currentUser.username) return;
+  try {
+    const res = await fetch(API_URL + '?action=heartbeat&username=' + encodeURIComponent(currentUser.username));
+    const data = await res.json();
+    if (data.forceLogout) {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      alert('คุณถูกผู้ดูแลระบบบังคับออกจากระบบครับ');
+      doLogout();
+    }
+  } catch(e) { /* เน็ตหลุดชั่วคราว ไม่ต้องทำอะไร รอบหน้าค่อยลองใหม่ */ }
+}
+
+// 👥 หน้าผู้ใช้งานออนไลน์ (เฉพาะแอดมิน)
+let onlineUsersPollTimer = null;
+async function renderOnlineUsers() {
+  const container = document.getElementById('online-users-container');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--text2);font-size:13px">⏳ กำลังโหลด...</div>';
+
+  let users = [];
+  try {
+    const res = await fetch(API_URL + '?action=getOnlineUsers');
+    const data = await res.json();
+    users = data.users || [];
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--red-light);font-size:13px">❌ โหลดข้อมูลไม่สำเร็จ</div>';
+    return;
+  }
+
+  const now = new Date();
+  container.innerHTML = users.map(u => {
+    const last = u.lastActive ? new Date(u.lastActive) : null;
+    const diffMin = last ? Math.floor((now - last) / 60000) : Infinity;
+    const isOnline = diffMin < 3; // เห็น heartbeat ภายใน 3 นาทีล่าสุด ถือว่าออนไลน์
+    const lastText = !last ? 'ไม่เคยเข้าใช้งาน' : diffMin < 1 ? 'ตอนนี้' : diffMin < 60 ? `${diffMin} นาทีที่แล้ว` : last.toLocaleString('th-TH', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:10px;height:10px;border-radius:50%;background:${isOnline ? '#22c55e' : '#666'};flex-shrink:0"></span>
+        <div>
+          <div style="font-weight:600">${u.name || u.username} <span style="color:var(--text2);font-weight:400;font-size:12px">(${u.username}${u.role === 'admin' ? ' · แอดมิน' : ''})</span></div>
+          <div style="font-size:12px;color:var(--text2)">${isOnline ? 'ออนไลน์' : 'ออฟไลน์'} — ใช้งานล่าสุด: ${lastText}</div>
+        </div>
+      </div>
+      ${isOnline && u.username !== currentUser.username ? `<button onclick="forceLogoutUser('${u.username}', '${(u.name||u.username).replace(/'/g,"\\'")}')" style="padding:6px 14px;background:transparent;border:1px solid var(--red);border-radius:6px;color:var(--red);cursor:pointer;font-size:12px;white-space:nowrap">🔒 บังคับออกจากระบบ</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function forceLogoutUser(username, displayName) {
+  if (!confirm(`บังคับให้ "${displayName}" ออกจากระบบตอนนี้เลยใช่มั้ยครับ?\n\n(ระบบจะออกให้ในไม่เกิน 1 นาที ตามรอบเช็คของเครื่องนั้น)`)) return;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'forceLogoutUser', username })
+    });
+    const result = await res.json();
+    if (result.status !== 'success') throw new Error(result.message || 'Failed');
+    showToast(`✅ สั่งบังคับออกจากระบบ "${displayName}" แล้ว`, 'success');
+  } catch(e) {
+    showToast('❌ ไม่สำเร็จ: ' + e.message, 'error');
+  }
 }
 
 let discountApproved = false;
@@ -1529,6 +1617,14 @@ function showPage(pg) {
   if (pg === 'cart') renderCart();
   if (pg === 'report') renderReport();
   if (pg === 'warranty') loadWarrantyLinks();
+  if (pg === 'online-users') {
+    renderOnlineUsers();
+    if (onlineUsersPollTimer) clearInterval(onlineUsersPollTimer);
+    onlineUsersPollTimer = setInterval(renderOnlineUsers, 15000);
+  } else if (onlineUsersPollTimer) {
+    clearInterval(onlineUsersPollTimer);
+    onlineUsersPollTimer = null;
+  }
   if (pg === 'history') {
     clearHistCache(); // รีเฟรชข้อมูลทุกครั้งที่เปิดหน้า
     const kw = document.getElementById('hist-keyword').value.trim();
@@ -2964,6 +3060,8 @@ async function reprintFromHistory(saleId) {
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom:15px;">
         <input type="text" id="qt-cust" placeholder="ชื่อลูกค้า / บริษัท *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
         <input type="text" id="qt-phone" placeholder="เบอร์โทรศัพท์ *" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
+        <input type="email" id="qt-email" placeholder="อีเมล (ถ้ามี)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
+        <input type="text" id="qt-taxid" placeholder="เลขที่ผู้เสียภาษี (ถ้ามี)" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; box-sizing:border-box;">
         <textarea id="qt-address" placeholder="ที่อยู่ลูกค้า" style="padding:10px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; height:50px; resize:none; grid-column: 1 / -1; box-sizing:border-box; font-family:inherit;"></textarea>
       </div>
 
@@ -3997,6 +4095,9 @@ function processQuote() {
     // ดึงเบอร์โทรลูกค้า (ถ้ามีช่องเบอร์โทร)
     const phoneInput = document.getElementById('qt-phone'); 
     const phone = phoneInput ? phoneInput.value.trim() : '';
+    const address = document.getElementById('qt-address') ? document.getElementById('qt-address').value.trim() : '';
+    const email = document.getElementById('qt-email') ? document.getElementById('qt-email').value.trim() : '';
+    const taxid = document.getElementById('qt-taxid') ? document.getElementById('qt-taxid').value.trim() : '';
     
     if(!cust || quoteItems.length === 0) { 
         alert('กรุณากรอกชื่อลูกค้าและเพิ่มสินค้าก่อนพิมพ์ครับ'); 
@@ -4057,7 +4158,10 @@ function processQuote() {
             <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px;">
                 <div style="width: 60%;">
                     <p style="margin: 3px 0;"><strong>ชื่อลูกค้า:</strong> ${cust}</p>
+                    <p style="margin: 3px 0;"><strong>ที่อยู่:</strong> ${address || '-'}</p>
                     <p style="margin: 3px 0;"><strong>เบอร์ติดต่อ:</strong> ${phone}</p>
+                    <p style="margin: 3px 0;"><strong>อีเมล:</strong> ${email || '-'}</p>
+                    <p style="margin: 3px 0;"><strong>เลขที่ผู้เสียภาษี:</strong> ${taxid || '-'}</p>
                 </div>
                 <div style="width: 35%; text-align: right;">
                     <p style="margin: 3px 0;"><strong>เลขที่ใบเสนอราคา:</strong> ${quoteId}</p>
