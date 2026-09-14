@@ -885,8 +885,7 @@ async function doLogin() {
   btn.textContent = 'กำลังตรวจสอบ...';
   btn.disabled = true;
   try {
-    const res = await fetch(API_URL + '?action=login&username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p));
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=login&username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p));
     if (data.ok) {
       currentUser = data.user;
       localStorage.setItem('ovb_session', JSON.stringify(currentUser)); // 🔐 จำสถานะล็อกอินไว้ ไม่ต้อง login ใหม่ทุกครั้งที่ refresh
@@ -1386,8 +1385,7 @@ async function loadWarrantyLinks() {
 
   let links = [];
   try {
-    const res = await fetch(API_URL + '?action=getWarrantyLinks');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getWarrantyLinks');
     links = data.links || [];
   } catch(e) {
     container.innerHTML = '<div style="color:var(--red-light);font-size:13px">❌ โหลดลิงก์ไม่สำเร็จ ลองใหม่อีกครั้ง</div>';
@@ -1880,8 +1878,7 @@ async function renderReport() {
 
   let allSales = [];
   try {
-    const res  = await fetch(API_URL + '?action=getSales');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getSales');
     allSales = data.sales || [];
   } catch(e) {
     allSales = getSales() || [];
@@ -2092,8 +2089,7 @@ async function exportReport(btnEl) {
 
   try {
     // Load ALL sales (no date filter)
-    const res = await fetch(API_URL + '?action=getSales');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getSales');
     const sales = data.sales || [];
 
     if (sales.length === 0) {
@@ -2222,8 +2218,7 @@ async function renderClaimsReport() {
 
   let claims = [];
   try {
-    const res = await fetch(API_URL + '?action=getClaims');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getClaims');
     claims = data.claims || [];
   } catch(e) {
     try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e2) {}
@@ -2274,8 +2269,7 @@ async function renderRepairsReport() {
 
   let repairs = [];
   try {
-    const res = await fetch(API_URL + '?action=getRepairs');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getRepairs');
     repairs = data.repairs || [];
   } catch(e) {
     try { repairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e2) {}
@@ -2327,8 +2321,7 @@ async function renderDepositsReport() {
 
   let deposits = [];
   try {
-    const res = await fetch(API_URL + '?action=getDeposits');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getDeposits');
     deposits = data.deposits || [];
   } catch(e) {
     deposits = [];
@@ -2538,6 +2531,24 @@ async function completeClaimJob(claimId) {
 let PRODUCTS = [];
 // ===== ตัวแปรสินค้า =====
 
+// 🔁 ยิง fetch แบบมี retry อัตโนมัติ กัน Google Apps Script สะดุดชั่วคราว (เช่นตอบช้า/error แปลกๆ)
+// แทนที่จะพังทันทีแล้วให้คนกดรีเฟรชเอง ลองเงียบๆ ให้เองก่อน 2 รอบ
+async function fetchWithRetry(url, options, retries, delayMs) {
+  retries = retries === undefined ? 2 : retries;
+  delayMs = delayMs === undefined ? 1200 : delayMs;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      const data = await res.json(); // ถ้า Google ตอบมาไม่ใช่ JSON (เช่นหน้า error ของ Google) จะโยน error ตรงนี้ แล้วเข้ารอบ retry ต่อไป
+      return data;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) await new Promise(r => setTimeout(r, delayMs * (attempt + 1))); // เว้นนานขึ้นทีละรอบ
+    }
+  }
+  throw lastErr;
+}
 
 // ===== ฟังก์ชันดึงสินค้าจาก Google Sheets =====
 async function loadProductsFromSheet() {
@@ -2546,8 +2557,7 @@ async function loadProductsFromSheet() {
   prodGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--amber); font-size: 16px;">⏳ กำลังดึงรายการสินค้าและสต็อกล่าสุด...</div>';
   
   try {
-    const res = await fetch(API_URL + '?action=getProducts');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getProducts');
     if (data.ok) {
       PRODUCTS = data.products;
       filterProducts(); // แสดงรายการสินค้า (ต้องเรียกตัวนี้ ไม่ใช่ renderProducts() ตรงๆ เพราะ renderProducts() ใช้ filteredProds ซึ่งต้องถูกสร้างใหม่จาก PRODUCTS ก่อนทุกครั้งที่โหลดข้อมูลใหม่ ไม่งั้นจะโชว์รายการเก่า/ว่างเปล่าค้างไว้)
@@ -2555,7 +2565,7 @@ async function loadProductsFromSheet() {
       prodGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--red);">❌ โหลดสินค้าไม่สำเร็จ: ${data.error}</div>`;
     }
   } catch (e) {
-    prodGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--red);">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณารีเฟรชหน้าเว็บ</div>`;
+    prodGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 50px; color: var(--red);">❌ ไม่สามารถเชื่อมต่อฐานข้อมูลได้<br><button onclick="loadProductsFromSheet()" style="margin-top:12px;padding:8px 20px;background:var(--red);border:none;border-radius:6px;color:#fff;cursor:pointer">🔄 ลองใหม่อีกครั้ง</button></div>`;
   }
 }
 
@@ -3269,8 +3279,7 @@ async function searchRepairHistory() {
 
   let repairs = [];
   try {
-    const res = await fetch(API_URL + '?action=getRepairs');
-    const data = await res.json();
+    const data = await fetchWithRetry(API_URL + '?action=getRepairs');
     repairs = data.repairs || [];
   } catch(e) {
     try { repairs = JSON.parse(localStorage.getItem('ovb_repairs') || '[]'); } catch(e2) {}
@@ -3878,8 +3887,7 @@ async function renderClaimHistory(keyword) {
     // 🔍 ดึงจาก Google Sheets จริงก่อน (เห็นเคลมจากทุกเครื่อง/ทุกคน) ถ้าเน็ตล่มค่อย fallback เป็นเครื่องนี้
     let claims = [];
     try {
-      const res = await fetch(API_URL + '?action=getClaims');
-      const data = await res.json();
+      const data = await fetchWithRetry(API_URL + '?action=getClaims');
       claims = data.claims || [];
     } catch(e) {
       try { claims = JSON.parse(localStorage.getItem('ovb_claims') || '[]'); } catch(e2) {}
