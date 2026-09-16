@@ -832,6 +832,9 @@ body.print-slip { margin: 0 !important; padding: 0 !important; }
         <div class="price-tier-val" id="m-p3"></div>
       </div>
     </div>
+    <div id="m-cost-row" style="display:none;margin:8px 0;padding:8px 12px;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.3);border-radius:6px;font-size:13px;color:#ef4444">
+      💰 ราคาทุน (แอดมินเท่านั้น): <b id="m-cost"></b>
+    </div>
     <table class="spec-table" id="m-specs"></table>
     <div style="font-size:12px;color:var(--text2);margin:8px 0" id="m-stock"></div>
     <div class="qty-row">
@@ -1470,6 +1473,15 @@ function openModal(id) {
   document.getElementById('m-p1').textContent = fmt(currentProd.priceRetail);
   document.getElementById('m-p2').textContent = fmt(currentProd.priceWholesale1);
   document.getElementById('m-p3').textContent = fmt(currentProd.priceWholesale2);
+
+  // 💰 ราคาทุน — โชว์เฉพาะแอดมินเท่านั้น (ซ่อนไว้เป็นค่าเริ่มต้น)
+  const costRow = document.getElementById('m-cost-row');
+  if (currentUser && currentUser.role === 'admin' && currentProd.costPrice > 0) {
+    document.getElementById('m-cost').textContent = fmt(currentProd.costPrice);
+    costRow.style.display = 'block';
+  } else {
+    costRow.style.display = 'none';
+  }
   
   // --- 🔥 จุดที่แก้ไขครับ: ปรับ Stock ให้ตัวใหญ่ หนา และเป็นสีแดง ---
   document.getElementById('m-stock').innerHTML = `<span style="color: #ff3333; font-size: 20px; font-weight: bold;">Stock: ${currentProd.stock} ชิ้น</span>`;
