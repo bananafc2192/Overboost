@@ -994,6 +994,14 @@ let currentDiscReqId = null;    // ID ของ request ที่กำลัง
 let discPollTimer = null;       // timer polling
 let adminPollTimer = null;      // timer polling ฝั่ง admin
 
+// 🪜 เพดานส่วนลดที่ staff ลดเองได้ตามยอดบิล (ไม่ต้องขออนุมัติถ้าไม่เกินนี้)
+function getStaffMaxDiscount(subtotal) {
+  if (subtotal < 1000) return 20;
+  if (subtotal < 6000) return 100;
+  if (subtotal < 10000) return 300;
+  return 500;
+}
+
 function onDiscountInput() {
   const amt = parseFloat(document.getElementById('discount-amount').value) || 0;
   if (currentUser && currentUser.role === 'admin') {
@@ -1002,11 +1010,26 @@ function onDiscountInput() {
     document.getElementById('discount-status').innerHTML = amt > 0 ?
       '<span class="discount-badge">✅ Admin อนุมัติแล้ว</span>' : '';
     renderCart();
+    return;
+  }
+
+  const subtotal = cart.reduce((s, c) => s + c.price * c.qty, 0);
+  const maxSelf = getStaffMaxDiscount(subtotal);
+
+  if (amt > 0 && amt <= maxSelf) {
+    // ไม่เกินสิทธิ์ที่ลดเองได้ → อนุมัติให้เองทันที ไม่ต้องรอแอดมิน
+    discountApproved = true;
+    discountAmount = amt;
+    document.getElementById('discount-status').innerHTML =
+      `<span class="discount-badge">✅ ลดเองได้ (ไม่เกินสิทธิ์ ฿${maxSelf.toLocaleString()})</span>`;
+    renderCart();
   } else {
     discountApproved = false;
     discountAmount = 0;
     document.getElementById('discount-status').innerHTML = amt > 0 ?
-      '<button class="btn-request-discount" onclick="requestDiscount()">📨 ขออนุมัติ</button>' : '';
+      (amt > maxSelf
+        ? `<div style="font-size:11px;color:var(--amber);margin-bottom:4px">เกินสิทธิ์ที่ลดเองได้ (สูงสุด ฿${maxSelf.toLocaleString()} สำหรับยอดนี้)</div><button class="btn-request-discount" onclick="requestDiscount()">📨 ขออนุมัติ</button>`
+        : '') : '';
     renderCart();
   }
 }
