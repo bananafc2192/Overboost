@@ -1465,7 +1465,7 @@ function renderProducts() {
       <div class="prod-price-sub">ส่ง: ${fmt(p.priceWholesale1)} / ${fmt(p.priceWholesale2)}</div>
       ${p.notice ? `<div class="notice-badge">⚠ ${p.notice.substring(0,30)}...</div>` : ''}
       <button class="btn-addcart" onclick="event.stopPropagation();quickAdd('${p.id}')" ${!inStock ? 'disabled' : ''}>+ ใส่ตะกร้า</button>
-      <button class="btn-addcart" style="background:#3b82f6; margin-top:5px;" onclick="event.stopPropagation(); sendToQuote('${p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${p.priceRetail || 0})">📋 + ใบเสนอราคา</button>
+      <button class="btn-addcart" style="background:#3b82f6; margin-top:5px;" onclick="event.stopPropagation(); sendToQuote('${p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;')}', ${p.priceRetail || 0}, ${p.costPrice || 0})">📋 + ใบเสนอราคา</button>
     </div>`;
   }).join('');
 
@@ -3044,8 +3044,8 @@ async function reprintFromHistory(saleId) {
 </div>
 
       <div style="background:#121212; border:1px solid #333; border-radius:6px; padding:10px;">
-        <div style="display:grid; grid-template-columns: 2fr 70px 100px 100px 30px; gap:5px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:5px; font-size:12px; color:#aaa; text-align:center;">
-          <div style="text-align:left;">รายการสินค้า</div><div>จำนวน</div><div>ราคา/หน่วย</div><div>รวม</div><div></div>
+        <div id="qt-items-header" style="display:grid; grid-template-columns: 2fr 60px 95px 95px 95px 95px 30px; gap:5px; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:5px; font-size:12px; color:#aaa; text-align:center;">
+          <div style="text-align:left;">รายการสินค้า</div><div>จำนวน</div><div>ราคา/หน่วย</div><div>รวมขาย</div><div class="qt-cost-col" style="display:none;">ทุน/หน่วย</div><div class="qt-cost-col" style="display:none;">รวมทุน</div><div></div>
         </div>
         <div style="text-align:center; color:#555; font-size:13px; margin-top:15px; display:block;" id="qt-empty-text">ยังไม่มีรายการสินค้า</div>
         <div id="qt-items-container" style="min-height:10px;"></div>
@@ -3990,13 +3990,14 @@ function addCustomQuoteItem() {
     const name = input.value.trim();
     if(!name) { alert('กรุณาพิมพ์ชื่อสินค้าที่ต้องการเพิ่มครับ'); return; }
     
-    quoteItems.push({ name: name, price: 0, qty: 1 });
+    // รายการที่พิมพ์เองไม่มีราคาทุนจากฐานสินค้า จึงเริ่มที่ 0
+    quoteItems.push({ name: name, price: 0, costPrice: 0, qty: 1 });
     input.value = '';
     renderQuoteItems();
 }
-function sendToQuote(name, price) {
+function sendToQuote(name, price, costPrice) {
     // 1. โยนสินค้าเข้า Array ใบเสนอราคา (จำนวนเริ่มที่ 1)
-    quoteItems.push({ name: name, price: price, qty: 1 });
+    quoteItems.push({ name: name, price: Number(price) || 0, costPrice: Number(costPrice) || 0, qty: 1 });
     
     // 2. อัปเดตตาราง (เผื่อว่าคุณโต้งเปิดหน้าต่างใบเสนอราคาค้างไว้อยู่)
     if (typeof renderQuoteItems === 'function') {
@@ -4023,27 +4024,67 @@ function sendToQuote(name, price) {
 function removeQuoteItem(index) { quoteItems.splice(index, 1); renderQuoteItems(); }
 function updateQuoteItemQty(index, val) { quoteItems[index].qty = parseInt(val) || 1; renderQuoteItems(); }
 function updateQuoteItemPrice(index, val) { quoteItems[index].price = parseFloat(val) || 0; renderQuoteItems(); }
+function updateQuoteItemCost(index, val) {
+    // ต้นทุนแก้ไขได้เฉพาะแอดมินในหน้าจอใบเสนอราคา
+    if (!(currentUser && currentUser.role === 'admin')) return;
+    quoteItems[index].costPrice = parseFloat(val) || 0;
+    renderQuoteItems();
+}
 function updateQuoteItemName(index, val) { quoteItems[index].name = val; }
 
 function renderQuoteItems() {
     const container = document.getElementById('qt-items-container');
     if(!container) return;
     
+    const isAdmin = !!(currentUser && currentUser.role === 'admin');
+    const header = document.getElementById('qt-items-header');
+    const costCols = document.querySelectorAll('#qt-items-header .qt-cost-col');
+    if (header) header.style.gridTemplateColumns = isAdmin
+        ? '2fr 60px 95px 95px 95px 95px 30px'
+        : '2fr 60px 95px 95px 30px';
+    costCols.forEach(el => el.style.display = isAdmin ? 'block' : 'none');
+
     let html = '';
     let grandTotal = 0;
+    let grandCost = 0;
     quoteItems.forEach((item, index) => {
-        grandTotal += (item.price * item.qty);
+        const itemCost = Number(item.costPrice) || 0;
+        const rowTotal = (Number(item.price) || 0) * (Number(item.qty) || 0);
+        const rowCost = itemCost * (Number(item.qty) || 0);
+        grandTotal += rowTotal;
+        grandCost += rowCost;
         html += `
-        <div style="display:grid; grid-template-columns: 2fr 70px 100px 100px 30px; gap:5px; margin-bottom:5px; align-items:center;">
-            <input type="text" value="${item.name}" onchange="updateQuoteItemName(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px;">
-            <input type="number" min="1" value="${item.qty}" onchange="updateQuoteItemQty(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:center;">
-            <input type="number" min="0" value="${item.price}" onchange="updateQuoteItemPrice(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:right;">
-            <div style="text-align:right; color:#fff;">${(item.price * item.qty).toLocaleString()}</div>
+        <div style="display:grid; grid-template-columns:${isAdmin ? '2fr 60px 95px 95px 95px 95px 30px' : '2fr 60px 95px 95px 30px'}; gap:5px; margin-bottom:5px; align-items:center;">
+            <input type="text" value="${item.name}" onchange="updateQuoteItemName(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; min-width:0;">
+            <input type="number" min="1" value="${item.qty}" onchange="updateQuoteItemQty(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:center; width:100%; box-sizing:border-box;">
+            <input type="number" min="0" value="${item.price}" onchange="updateQuoteItemPrice(${index}, this.value)" style="padding:6px; background:#1e1e1e; border:1px solid #444; color:#fff; border-radius:4px; font-size:12px; text-align:right; width:100%; box-sizing:border-box;">
+            <div style="text-align:right; color:#fff;">${rowTotal.toLocaleString()}</div>
+            ${isAdmin ? `<input type="number" min="0" value="${itemCost}" onchange="updateQuoteItemCost(${index}, this.value)" title="ราคาทุน/หน่วย" style="padding:6px; background:#20261f; border:1px solid #4b6b4a; color:#86efac; border-radius:4px; font-size:12px; text-align:right; width:100%; box-sizing:border-box;">` : ''}
+            ${isAdmin ? `<div style="text-align:right; color:#86efac;">${rowCost.toLocaleString()}</div>` : ''}
             <button onclick="removeQuoteItem(${index})" style="background:transparent; border:none; color:#ff3333; cursor:pointer;">🗑️</button>
         </div>`;
     });
     container.innerHTML = html;
     if(document.getElementById('qt-grand-total')) document.getElementById('qt-grand-total').textContent = grandTotal.toLocaleString();
+
+    // แสดงทุนรวมเฉพาะแอดมิน
+    let costTotalEl = document.getElementById('qt-grand-cost');
+    if (isAdmin) {
+        if (!costTotalEl) {
+            const totalWrap = document.getElementById('qt-grand-total')?.parentElement?.parentElement;
+            if (totalWrap) {
+                totalWrap.style.flexDirection = 'column';
+                totalWrap.style.alignItems = 'flex-end';
+                costTotalEl = document.createElement('div');
+                costTotalEl.id = 'qt-grand-cost';
+                costTotalEl.style.cssText = 'margin-top:6px; color:#86efac; font-size:14px;';
+                totalWrap.appendChild(costTotalEl);
+            }
+        }
+        if (costTotalEl) costTotalEl.innerHTML = `<b>ทุนรวม: <span>${grandCost.toLocaleString()}</span> บาท</b>`;
+    } else if (costTotalEl) {
+        costTotalEl.remove();
+    }
 }
 
 // พิมพ์ใบเสนอราคา (เวอร์ชันสมบูรณ์ มีโลโก้ + หน้ากระดาษ A4)
